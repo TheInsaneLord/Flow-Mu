@@ -1,8 +1,5 @@
 
-# Flow-Mu AI chat bot for Twitch and Discord
-
-<img src="https://static-cdn.jtvnw.net/jtv_user_pictures/b1668ee3-a66d-4990-ab21-7bfd5dfd19b3-profile_image-300x300.png" alt="Logo" style="border-radius: 50%; width: 150px; height: 150px;">
-
+# Flow-Mu AI chat bot for Twitch and Discord ![Logo](https://static-cdn.jtvnw.net/jtv_user_pictures/b1668ee3-a66d-4990-ab21-7bfd5dfd19b3-profile_image-300x300.png) 
 
 Flow-Mu is the chat companion of the Twitch streamer [The_Insane_Lord](https://www.twitch.tv/the_insane_lord) whose sole job is to help keep the chat happy and give them someone else to talk to.
 
