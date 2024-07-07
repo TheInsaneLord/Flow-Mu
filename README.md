@@ -5,6 +5,8 @@ Flow-Mu is the chat companion of the Twitch streamer [The_Insane_Lord](https://w
 
 This is the public side of the code for the Flow-Mu bot used on [The_Insane_Lord](https://www.twitch.tv/the_insane_lord) Twitch chat and Discord it is missing some data to protect the sensitive code. This is here so anyone curious about how the bot works can have a look at the code. If you have suggestions for the bot such as adjustment to the code or adding new commands feel free to mention them on stream.
 
+The latest place to find the code being used for flow mu is in the folder: live
+
 ## My Socials
 
 - Github [TheInsaneLord](https://github.com/TheInsaneLord)
