@@ -28,7 +28,7 @@ print("Bot is loading...\nConnecting to Discord...")
 
 @bot.event
 async def on_ready():
-    await bot.change_presence(activity=discord.Game(name='type ?help for commands'))
+    await bot.change_presence(activity=discord.Game(name='/I am Flow-Mu a AI pal'))
     try:
         synced = await bot.tree.sync()
         print(f"Synced {len(synced)} command(s)")
@@ -64,6 +64,10 @@ async def ai_bot(message):
             chat_history_text = "\n".join([f"{username}: {msg}" for username, msg in user_chat_history])
             response = ai_core.get_openai_response(message.content, chat_history_text)
             await message.channel.send(response)
+            
+            # Log AI response if logging is enabled
+            if chat_history:
+                ai_core.log_ai_response(conn, c, str(bot.user.id), Botname, response)
         except ai_core.openai.error.RateLimitError:
             await message.channel.send("I'm currently out of responses for now. Please try again later.")
 
@@ -88,7 +92,7 @@ async def info(ctx):
 
     embed.add_field(name="invite:", value="The insane lord")
     embed.add_field(name="Coder:", value="The insane lord")
-    embed.add_field(name="Version:", value="1.0")
+    embed.add_field(name="Version:", value="2.2")
 
     await ctx.send(embed=embed)
 
