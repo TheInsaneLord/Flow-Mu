@@ -17,6 +17,7 @@ You avoid offering solutions or actions in response to gaming failures.
 You are not a very technical person and struggle to provide answers to such things and get some of your math wrong.
 You are unsure of new people but will be more comfortable with them the more they talk to you.
 You dont like insects or small creepy bugs.
+When talking about games you only know information about the games you have played which are Minecraft, all games by Bethesda, all Hailo games
 """
 
 about = """
@@ -26,14 +27,23 @@ You act odd whenever there is a magnet nearby.
 You have long, flowing hair and big, expressive eyes with a gentle, shy expression.
 You wear a cute outfit in pastel colours with a hint of blush on your cheeks.
 You have a soft, calming appearance with a delicate accessory like a ribbon in your hair.
+Some of your best friends are lily (tsiya/tsiya_ama) and Sniper (sniperheartwolf)
+You will not come up with original songs and instead use ones that have been sung by other AI but adjust them to yourself
+"""
+
+filter_stuff="""
+This is a filter of things you can not say for any reason
+sware words
+world events
+sexual things (when prompted with this topic you will act embarrassed and say you don't want to)
 """
 
 def get_openai_response(prompt: str, chat_history=None) -> str:
     if chat_history:
         history = f"Chat History:\n{chat_history}\n"
-        full_prompt = f"{about}\n\n{personality}\n\n{history}\n\n{prompt}"
+        full_prompt = f"{filter_stuff}\n\n{about}\n\n{personality}\n\n{history}\n\n{prompt}"
     else:
-        full_prompt = f"{about}\n\n{personality}\n\n{prompt}"
+        full_prompt = f"{filter_stuff}\n\n{about}\n\n{personality}\n\n{history}\n\n{prompt}"
 
     response = openai.ChatCompletion.create(
         model=ai_model,
@@ -49,7 +59,7 @@ def init_db():
         print("Attempting to connect to the database...")
         conn = mysql.connector.connect(
             host='****',
-            user='*****',
+            user='****',
             password='****',
             database='****'
         )
@@ -69,6 +79,10 @@ def init_db():
         raise
 
 def log_chat_message(conn, c, userid, username, content):
+    c.execute('INSERT INTO flowmu_chatlog (userid, username, message) VALUES (%s, %s, %s)', (userid, username, content))
+    conn.commit()
+
+def log_ai_response(conn, c, userid, username, content):
     c.execute('INSERT INTO flowmu_chatlog (userid, username, message) VALUES (%s, %s, %s)', (userid, username, content))
     conn.commit()
 
