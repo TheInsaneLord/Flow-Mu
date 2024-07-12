@@ -184,7 +184,7 @@ class Bot(commands.Bot):
 #   info command
     @commands.command()
     async def info(self, ctx: commands.Context):
-        await ctx.send(f'My name is Flow-Mu I am a AI bot that is a compain for the chat if you want to see how I work then use ?code I am curently in Version 2.2')
+        await ctx.send(f'My name is Flow-Mu I am a AI bot that is a friend for the chat if you want to see how I work then use ?code I am currently in Version 2.2')
 
 
 #    DnD dice roll
