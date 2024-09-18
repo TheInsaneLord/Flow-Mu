@@ -15,7 +15,7 @@ flowmu_tts = True
 
 # OAuth token and channels
 chat_channels = ['the_insane_lord']
-oauth_token = 'oauth:a3x4sba24fea2wfkpkexry49ezjefi'
+oauth_token = 'oauth:****'
 
 # Queue for managing TTS requests
 tts_queue = Queue()
