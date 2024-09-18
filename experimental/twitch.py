@@ -10,9 +10,9 @@ import asyncio
 
 # global varebals
 bot_accept_names = ["flow-mu", "@flow-mu", "@flowmubot", "@FlowMuBot","@Flow-Mu Bot#7224", "@Flow-Mu Bot"] # Names AI will respond to
-ignore_users = []
+ignore_users = ["streamelements", "flowmubot", "soundalerts"]
 raw_tps = datetime.now().timestamp()
-tsp = datetime.fromtimestamp(raw_tps).strftime("%H:%M")
+tsp = datetime.fromtimestamp(raw_tps).strftime("%H:%M:%S")
 
 #   |================================================================|
 #   |##################   Configuration Below  ######################|
@@ -95,19 +95,40 @@ def check_settings():
     print("No settings have changed.")
 
 def send_status():
-    # Send status every 30 seconds
+    # Establish connection to the database
     connection = connect_to_db()
     cursor = connection.cursor()
 
-    cursor.execute(
-        'INSERT INTO script_status (script_name, status) VALUES (%s, %s)',
-        ('twitch_bot', 'running')
-    )
+    try:
+        # Check if a status already exists for the bot
+        cursor.execute("SELECT * FROM script_status WHERE script_name = %s", ('twitch_bot',))
+        result = cursor.fetchone()
 
-    connection.commit()
-    # Ensure the cursor and connection are closed properly
-    cursor.close()
-    connection.close()
+        if result:
+            # If a record exists, update the status
+            cursor.execute(
+                "UPDATE script_status SET status = %s WHERE script_name = %s",
+                ('running', 'twitch_bot')
+            )
+            print("Updated status to 'running' for twitch_bot")
+        else:
+            # If no record exists, insert a new status
+            cursor.execute(
+                'INSERT INTO script_status (script_name, status) VALUES (%s, %s)',
+                ('twitch_bot', 'running')
+            )
+            print("Inserted new status 'running' for twitch_bot")
+
+        connection.commit()
+
+    except Error as e:
+        print(f"Error updating/inserting status: {e}")
+
+    finally:
+        # Ensure the cursor and connection are closed properly
+        cursor.close()
+        connection.close()
+
 
 def term_print(data):
     global tsp
@@ -271,6 +292,7 @@ async def response(message):
 
         else:
             print("No response found from AI Core.")
+            term_print("No response found from AI Core")
 
     except Error as e:
         print(f"Error retrieving response from database: {e}")
@@ -286,6 +308,7 @@ async def periodic_check(interval):
     while True:
         old_settings = settings.copy()
         check_settings()  # This will call your existing check_settings function
+        send_status() # send status update
 
         # Check if channels have changed
         if old_settings.get('chat_channel') != settings.get('chat_channel'):
@@ -364,18 +387,26 @@ class Bot(commands.Bot):
 
             
     async def event_message(self, message):
-        if message.echo or message.author.name in ignore_users:
-            return
+        global bot_running
+
+        if bot_running == 'true':
+            if message.echo or message.author.name in ignore_users:
+                return
+            
+            if not message.content.startswith('?'):
+                user_message = str(message.content)
+                term_msg = f"{tsp} | {message.author.name}: {message.content}"
+                print(term_msg)
+
+                # Await the send_message function to ensure it runs properly
+                await send_message(term_msg, message, user_message)
+
+            await self.handle_commands(message)
         
-        if not message.content.startswith('?'):
-            user_message = str(message.content)
-            term_msg = f"{tsp} | {message.author.name}: {message.content}"
-            print(term_msg)
-
-            # Await the send_message function to ensure it runs properly
-            await send_message(term_msg, message, user_message)
-
-        await self.handle_commands(message)
+        else:
+            if message.content.startswith('?'):
+                print("Bot is turned off. Commands and AI are disabled.")
+                term_print("Bot is turned off. Commands and AI are disabled.")
 
 
 #   |================================================================|
@@ -437,31 +468,51 @@ class Bot(commands.Bot):
             else: # good boop
                 await ctx.send("Oh good, nothing bad happened.")
 
-            return
-
         # Failed other users
-        if debug == True:
-                print("flow-mu boops other")
+        else:
+            if debug == True:
+                    print("flow-mu boops other")
 
-        if roll < chance: # bad boop
-            await ctx.send(f"Flow-mu tries to boop {user} on the nose but fails the stealth check and then trips up and falls on her face.")
-            await ctx.send(f"Ouch!... You saw nothing {user}.")
+            if roll < chance: # bad boop
+                await ctx.send(f"Flow-mu tries to boop {user} on the nose but fails the stealth check and then trips up and falls on her face.")
+                await ctx.send(f"Ouch!... You saw nothing {user}.")
 
-        else: # good boop
-            await ctx.send(f"Flow-mu succeeded in sneaking up and booping {user} on their nose.")
-            await ctx.send(f"Ha ha ha I booped you {user}.")
+            else: # good boop
+                await ctx.send(f"Flow-mu succeeded in sneaking up and booping {user} on their nose.")
+                await ctx.send(f"Ha ha ha I booped you {user}.")
     
     @commands.command()
-    async def st(self, ctx: commands.Context):
-        check_settings()
-        term_print(settings)
-        #settings = get_settings(check=True)
-        #await ctx.send(settings)
-        #print(settings)
+    async def goto(self, ctx, channel="x"):
+        connection = connect_to_db()
+        cursor = connection.cursor(dictionary=True)
+        
+        if channel != 'X':
+            try:
+                cursor.execute(
+                    "UPDATE flowmu_settings SET value = %s WHERE setting = %s",
+                    (channel, 'chat_channel')
+                )
+
+                connection.commit()
+
+            except Error as e:
+                print(f"Error sending message to database: {e}")
+
+
+            cursor.close()
+            connection.close()
+        
+            term_print(f"Going to {channel}")
+            await ctx.send(f"Ok I will head over the {channel}. Hope they are playing some thing fun.")
+        else:
+            term_print(f"Failed to go to: {channel}")
+            await ctx.send("Hmm... did you for get to say what channel I should go to")
 
 # run section
 if db_check is not None:
     print("Database connected.")
+bot_running = settings.get('twitch_bot')
+
 
 bot = Bot()
 bot.run()
