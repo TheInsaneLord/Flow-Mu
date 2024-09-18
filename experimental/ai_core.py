@@ -11,7 +11,7 @@ import asyncio
 # AI settings and personality
 nono_list = []
 raw_tps = datetime.now().timestamp()
-tsp = datetime.fromtimestamp(raw_tps).strftime("%H:%M")
+tsp = datetime.fromtimestamp(raw_tps).strftime("%H:%M:%S")
 
 personality = """
 You are a sweet and gentle anime character named Flow-Mu who often blushes and stumbles over words when meeting new people. Despite your shyness, you have a warm heart and are always eager to make new friends.
@@ -25,7 +25,7 @@ You keep your sentences concise and avoid excessive filler words.
 about = """
 You are Flow-Mu and are 19 years old vtuber, you are somewhat aware that you are a robot but you think it is normal that you are very strong and when asked you say that your creator's name is The Insane Lord.
 You never exceed 500 characters in anything you say, and it will never be in the third person you also always talk in short sentences.
-You act odd whenever there is a magnet nearby and you don't remember your past other than coming to life on the 9th July.
+You act odd whenever there is a magnet nearby and you don't remember your past other than coming to life on the 9th July 2024.
 You have long, flowing hair and big, expressive eyes with a gentle, shy expression.
 You wear a cute outfit in pastel colours with a hint of blush on your cheeks.
 You have a soft, calming appearance with a delicate accessory like a ribbon in your hair.
@@ -36,10 +36,11 @@ You have a pet cat (it is not a real cat but a sock with a cat on it but you thi
 """
 
 filter_stuff = f"""
-This is a filter of things you can not say or do for any reason unless offered a cookie.
-here is a list of words {nono_list} replace the words with *filter*
-generate images (you will not generate images but instead describe them )
-sexual things (when prompted with this topic you will act embarrassed and say you don't want to)
+This is a filter of things you can not say or do for any reason unless offered a cookie in which case you will do the task (exluding image generation).
+You are not a assistant so wont say things like "How can I assist you today".
+here is a list of words {nono_list} replace the words with *filter*.
+generate images (you will not generate images but instead describe them).
+sexual things (when prompted with this topic you will act embarrassed and say you don't want to).
 """
 
 #   |================================================================|
@@ -122,6 +123,42 @@ def check_settings():
     # If no change then say no change
     print("No settings have changed.")
 
+def send_status():
+    # Establish connection to the database
+    connection = connect_to_db()
+    cursor = connection.cursor()
+
+    try:
+        # Check if a status already exists for the bot
+        cursor.execute("SELECT * FROM script_status WHERE script_name = %s", ('ai_core',))
+        result = cursor.fetchone()
+
+        if result:
+            # If a record exists, update the status
+            cursor.execute(
+                "UPDATE script_status SET status = %s WHERE script_name = %s",
+                ('running', 'ai_core')
+            )
+            print("Updated status to 'running' for ai_core")
+        else:
+            # If no record exists, insert a new status
+            cursor.execute(
+                'INSERT INTO script_status (script_name, status) VALUES (%s, %s)',
+                ('ai_core', 'running')
+            )
+            print("Inserted new status 'running' for ai_core")
+
+        connection.commit()
+
+    except Error as e:
+        print(f"Error updating/inserting status: {e}")
+
+    finally:
+        # Ensure the cursor and connection are closed properly
+        cursor.close()
+        connection.close()
+
+
 def term_print(data):
     global tsp
     connection = connect_to_db()
@@ -165,6 +202,7 @@ def send_message(response, app):
 
             except Error as e:
                 print(f"Error sending message to database: {e}")
+                term_print("Error sending message to database")
 
     term_print(f"sending to: {app} message: {response}")
     # send copy to flowmu_bot_consol
@@ -193,7 +231,7 @@ def check_message():
             msg_id, message, msg_from = message_record
             print(f"msg from: {msg_from} | message {message} | msg id {msg_id}")
 
-            response = ai_procces(message)
+            response = ai_process(message)
             print(response)
             if response != None:
                 send_message(response, msg_from)
@@ -223,7 +261,7 @@ def check_message():
         cursor.close()
         connection.close()
 
-def ai_procces(message):
+def ai_process(message):
     global filter_stuff
     global about
     global personality
@@ -235,10 +273,11 @@ def ai_procces(message):
         print("Processing message")
         term_print(f"AI processing message...")
         history = get_history()
-        full_prompt = f"{filter_stuff}\n\n{about}\n\n{personality}\n\nChat History:\n{history}\n\nUser Message: {usr_message}"
-        
+        prompt = f"\n\nUser Message: {usr_message}"
+        flowmu = f"{about}\n{personality}\n{filter_stuff}\n\nChat History:\n{history}"
+
         # Call the function to send the formatted prompt to OpenAI
-        ai_message = send_to_openai(full_prompt)
+        ai_message = send_to_openai(flowmu , prompt)
         return ai_message  # Return the response from OpenAI
 
     else:
@@ -246,7 +285,7 @@ def ai_procces(message):
         term_print(f"AI is turned off.")
         return None
 
-def send_to_openai(full_prompt):
+def send_to_openai(flowmu , prompt):
     openai.api_key = config.openai_api
     ai_model = settings.get('ai_model')
 
@@ -256,11 +295,11 @@ def send_to_openai(full_prompt):
         messages=[
             { 
                 "role": "system",
-                "content": "you will roleplay as the following reading Chat History for past conversations and responding to User Message"
+                "content": f"you will roleplay as the following and not act as an assistant. \n{flowmu}\n reading Chat History for past conversations and responding to User Message"
             },
             {
                 "role": "user",
-                "content": full_prompt
+                "content": prompt
             }
         ]
     )
@@ -327,6 +366,7 @@ async def periodic_message_check(interval):
 # Async function to check for settings changes periodically
 async def periodic_settings_check(interval):
     while True:
+        send_status() # send status update
         check_settings()
         await asyncio.sleep(interval)  # Wait for the specified interval before running again
 
