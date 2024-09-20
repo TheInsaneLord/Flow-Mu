@@ -11,12 +11,16 @@ import asyncio
 # global varebals
 bot_accept_names = ["flow-mu", "@flow-mu", "@flowmubot", "@FlowMuBot","@Flow-Mu Bot#7224", "@Flow-Mu Bot"] # Names AI will respond to
 ignore_users = ["streamelements", "flowmubot", "soundalerts"]
-raw_tps = datetime.now().timestamp()
-tsp = datetime.fromtimestamp(raw_tps).strftime("%H:%M:%S")
 
 #   |================================================================|
 #   |##################   Configuration Below  ######################|
 #   |================================================================|
+
+def time_stamp():
+    raw_tps = datetime.now().timestamp()
+    tsp = datetime.fromtimestamp(raw_tps).strftime("%H:%M:%S")
+
+    return tsp
 
 #   Database stuff
 def connect_to_db():
@@ -131,7 +135,7 @@ def send_status():
 
 
 def term_print(data):
-    global tsp
+    tsp = time_stamp()
     connection = connect_to_db()
     cursor = connection.cursor()
 
@@ -388,6 +392,7 @@ class Bot(commands.Bot):
             
     async def event_message(self, message):
         global bot_running
+        tsp = time_stamp()
 
         if bot_running == 'true':
             if message.echo or message.author.name in ignore_users:
