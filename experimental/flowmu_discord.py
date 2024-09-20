@@ -14,13 +14,17 @@ bot = commands.Bot(command_prefix="?", case_insensitive=True, intents=intents)
 
 
 bot_accept_names = ["flow-mu", "@flow-mu", "@flowmubot", "@FlowMuBot","@Flow-Mu Bot#7224", "@Flow-Mu Bot"] # Names AI will respond to
-raw_tps = datetime.now().timestamp()
-tsp = datetime.fromtimestamp(raw_tps).strftime("%H:%M:%S")
 ignore_users = [""]
 
 #   |================================================================|
 #   |##################   Configuration Below  ######################|
 #   |================================================================|
+
+def time_stamp():
+    raw_tps = datetime.now().timestamp()
+    tsp = datetime.fromtimestamp(raw_tps).strftime("%H:%M:%S")
+
+    return tsp
 
 #   Database stuff
 def connect_to_db():
@@ -135,7 +139,7 @@ def send_status():
 
 
 def term_print(data):
-    global tsp
+    tsp = time_stamp()
     connection = connect_to_db()
     cursor = connection.cursor()
 
@@ -347,6 +351,7 @@ async def on_ready():
 @bot.event
 async def on_message(message):
     global bot_running
+    tsp = time_stamp()
 
     if bot_running != 'false':
         if message.author == bot.user or message.author.name in ignore_users:
