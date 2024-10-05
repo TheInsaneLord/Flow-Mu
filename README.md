@@ -26,15 +26,15 @@ The bot has been coded in a way so that when it is not in use it won't rack up b
 I would prefer you not to copy the complete code however I have no issue with you copying bits of the code to help get you started with your own bot.
 
 ### If I do make my bot using some of your code do I have to credit you?
-If you have grately adjusted the code then no, however, if it is just a copy and past please provide credit
+If you have greatly adjusted the code then no, however, if it is just a copy and past please provide credit
 
 ### Why is there a ToS for Flow-mu
-As of version 3 of Flow-mu, a [Terms of Service](https://insane-servers.co.uk/flow-mu_tos) has been put in place this was done as a request of users as they wanted secureity in knowing how the data Flow-mu uses was being hamdeled 
+As of version 3 of Flow-mu, a [Terms of Service](https://insane-servers.co.uk/flow-mu_tos) has been put in place this was done as a request of users as they wanted security in knowing how the data Flow-mu uses was being handled 
 
 ## Plans For the future
-### Version 4
+### What to expect for version 4 of Flow-mu
 Here is a list of features for the next vertion of Flow-mu
 - allow voice interaction
 - look into allowing her to do her own streams
 - create a custom voice for Flow-mu
-- animate a the Flow-mu character model
+- animate the Flow-mu character model
