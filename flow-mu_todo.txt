@@ -24,6 +24,7 @@
 11. *add tos_user list for users who don't mind data usage requiered for flow-mu
 12. *adjust chat history to only display past conversations between user and bot
 13. create momory system that allows notebel data to be sheared between chats assign messages with a tag from 0-9 to repesent importance of the data
+14. fix issue with chat history and response_to_id where if chat histry is off bot errors as no ID is given
 
-== legal and other data ==
+== Legal and other dat ==
 1. create tos
