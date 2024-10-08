@@ -1,0 +1,29 @@
+* means done
++ means working on curently
+
+== Blender ==
+1. *import and link skirt armature
+2. *fix eyebrows (delete arcature modeller and vertex group assign everything to the head bone)
+3. *fix clothing
+4. *rename vertex groups for top and parent to rig
+5. make hair childe of head bone (alt+p to clear parent parent hair and armature)
+6. make clothing for flow-mu
+7. create anamations for OBS
+
+== code ==
+1. *add status for scripts and update websit to display it
+2. *make console print a func in twitch bot like it is in ai core
+3. *allow flow-mu to join in raid or add option to send (optinal might not be good idea)
+4. *create updated discord bot
+5. *update webpanel and include script logs
+6. *fix bot toggle so bot can be disabeld/turned off when not needed
+7. *create a way to do TTS (posably good idea to run localy as no need for it to be active 24/7)
+8. *enabel status for scripts and display status on web panel
+9. add notifiction in chat when ai is toggled
+10. *turn off chat history when changing channel
+11. *add tos_user list for users who don't mind data usage requiered for flow-mu
+12. *adjust chat history to only display past conversations between user and bot
+13. create momory system that allows notebel data to be sheared between chats assign messages with a tag from 0-9 to repesent importance of the data
+
+== legal and other data ==
+1. create tos
