@@ -7,8 +7,9 @@
 3. *fix clothing
 4. *rename vertex groups for top and parent to rig
 5. make hair childe of head bone (alt+p to clear parent parent hair and armature)
-6. make clothing for flow-mu
+6. make new clothing and other outfits for flow-mu
 7. create anamations for OBS
+8. add accesrys to curent flow-mu modle
 
 == code ==
 1. *add status for scripts and update websit to display it
@@ -23,8 +24,12 @@
 10. *turn off chat history when changing channel
 11. *add tos_user list for users who don't mind data usage requiered for flow-mu
 12. *adjust chat history to only display past conversations between user and bot
-13. create momory system that allows notebel data to be sheared between chats assign messages with a tag from 0-9 to repesent importance of the data
+13. create momory system that allows notebel data to be sheared between chats. assing each messages with a tag from 0-5 to repesent importance of the data
 14. fix issue with chat history and response_to_id where if chat histry is off bot errors as no ID is given
+15. fix the random reply posting being deleayed
+16. adjust AI perameters and add Lore catagory that contains lore relate information
+17. add types on the function parameters
 
-== Legal and other dat ==
+== Legal and other data ==
 1. create tos
+2. look into a system that would allow for multible set animations to be interchanged in OBS allowing for idle anamations to be used for flow-mu
