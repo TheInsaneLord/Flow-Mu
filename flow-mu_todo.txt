@@ -1,5 +1,6 @@
 * means done
 + means working on curently
+- task/idea scraped or might be ad later
 
 == Blender ==
 1. *import and link skirt armature
@@ -18,17 +19,19 @@
 4. *create updated discord bot
 5. *update webpanel and include script logs
 6. *fix bot toggle so bot can be disabeld/turned off when not needed
-7. *create a way to do TTS (posably good idea to run localy as no need for it to be active 24/7)
+7. *create a way to do TTS (posably good idea to run localy as there is no need for it to be active 24/7)
 8. *enabel status for scripts and display status on web panel
-9. add notifiction in chat when ai is toggled
+9. -add notifiction in chat when ai is toggled
 10. *turn off chat history when changing channel
 11. *add tos_user list for users who don't mind data usage requiered for flow-mu
 12. *adjust chat history to only display past conversations between user and bot
 13. create momory system that allows notebel data to be sheared between chats. assing each messages with a tag from 0-5 to repesent importance of the data
-14. fix issue with chat history and response_to_id where if chat histry is off bot errors as no ID is given
+14. *fix issue with chat history and response_to_id where if chat histry is off bot errors as no ID is given
 15. fix the random reply posting being deleayed
 16. adjust AI perameters and add Lore catagory that contains lore relate information
 17. add types on the function parameters
+18. *allow the requirement for ToS to be turned on and off
+19. add notification when Flow-mu joins a channel and discord server
 
 == Legal and other data ==
 1. create tos
