@@ -9,7 +9,8 @@ import asyncio
 
 # global varebals
 bot_accept_names = ["flow-mu", "@flow-mu", "@flowmubot", "@FlowMuBot","@Flow-Mu Bot#7224", "@Flow-Mu Bot"] # Names AI will respond to
-ignore_users = ["streamelements", "flowmubot", "soundalerts"]
+ignore_users = ["streamelements", "flowmubot", "soundalerts", "nightbot"]
+bot_ver = '3.2'
 
 #   |================================================================|
 #   |##################   Configuration Below  ######################|
@@ -167,6 +168,7 @@ async def send_message(term_msg, message, user_message):
     random_reply_chance = settings.get('random_reply_chance')
     random_reply = settings.get('random_reply')
     cursor = connection.cursor()
+    use_tos = settings.get('use_tos')
 
     if random_reply == 'true':
         chance = random.randint(0, 100)
@@ -183,9 +185,11 @@ async def send_message(term_msg, message, user_message):
         # Check if user is already in the tos_users table
         cursor.execute('SELECT * FROM tos_users WHERE user_id = %s AND platform = %s'
                         , (message.author.id, 'twitch'))
-        tos = cursor.fetchone()
-        print(tos)
-        if tos:
+        tos_user = cursor.fetchone()
+        response_to_id = 0
+        print(tos_user)
+        
+        if tos_user or not use_tos:
             print("Sending message to AI Core.")
             
             print(f"AI ON: {ai_on}")
@@ -234,7 +238,7 @@ async def send_message(term_msg, message, user_message):
 
                 
                 # After sending the message, check for AI response
-                await response(message, response_to_id)
+                await response(message, response_to_id) # need to create dummy value
         
         else:
             print("User did not agree to ToS")
@@ -339,6 +343,13 @@ async def periodic_check(interval):
         # Check if channels have changed
         if old_settings.get('chat_channel') != settings.get('chat_channel'):
             await bot.update_channels()  # Update channels if there was a change
+            await asyncio.sleep(3)
+            await bot.connected_channels[0].send("*Flow-Mu shyly steps into the chat, looking around with a soft smile.*")
+            await bot.connected_channels[0].send(
+                "H-Hi, everyone! *blushes* I’m Flow-Mu! If you want to chat, just mention my name. "
+                "I’ll be here to keep everyone company and share some smiles! *giggles*"
+            )
+
 
         # Add other periodic checks here if needed
 
@@ -387,7 +398,7 @@ class Bot(commands.Bot):
         # Start the periodic settings check task
         self.loop.create_task(periodic_check(30))  # Check every 30 seconds
 
-    async def update_channels(self, ctx):
+    async def update_channels(self):
         new_channels = settings.get('chat_channel', self.current_channels)
         connection = connect_to_db()
         cursor = connection.cursor(dictionary=True)
@@ -449,8 +460,7 @@ class Bot(commands.Bot):
             if message.content.startswith('?'):
                 print("Bot is turned off. Commands and AI are disabled.")
                 term_print("Bot is turned off. Commands and AI are disabled.")
-
-
+   
 #   |================================================================|
 #   |##################   Commands go below  ########################|
 #   |================================================================|
@@ -463,7 +473,7 @@ class Bot(commands.Bot):
 #   info command
     @commands.command()
     async def info(self, ctx: commands.Context):
-        await ctx.send(f'My name is Flow-Mu I am a AI bot that is a friend for the chat if you want to see how I work then use ?code I am currently in Version 3.1')
+        await ctx.send(f'My name is Flow-Mu I am a AI bot that is a friend for the chat if you want to see how I work then use ?code I am currently in Version: ', bot_ver)
 
 #    DnD dice roll
     @commands.command()
@@ -578,10 +588,11 @@ class Bot(commands.Bot):
 
             except Error as e:
                 print(f"Error sending message to database: {e}")
-                await ctx.send("Oh no, I am having some issues don't worry @the_insane_lord will look at it.")
+                await ctx.send("Oh no, I am having some issues don't worry @the_insane_lord will fix it.")
             finally:
                 cursor.close()
                 connection.close()
+        
         else:
             await ctx.send("You can find the ToS here: https://insane-servers.co.uk/flow-mu_tos. if you agree just do ?tos agree")
 
