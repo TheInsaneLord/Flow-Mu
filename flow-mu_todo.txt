@@ -31,7 +31,7 @@
 16. adjust AI perameters and add Lore catagory that contains lore relate information
 17. add types on the function parameters
 18. *allow the requirement for ToS to be turned on and off
-19. add notification when Flow-mu joins a channel and discord server
+19. +add notification when Flow-mu joins a channel and discord server
 
 == Legal and other data ==
 1. create tos
