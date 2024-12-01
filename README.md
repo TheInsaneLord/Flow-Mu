@@ -8,8 +8,8 @@ This is the public side of the code for the Flow-Mu bot used on [The_Insane_Lord
 The latest place to find the code being used for flow mu is in the folder: [**live**](https://github.com/TheInsaneLord/Flow-Mu/tree/main/live). You can add Flow-Mu to your discord server with [this link](https://discord.com/oauth2/authorize?client_id=1258255735612117012&permissions=71680&integration_type=0&scope=bot) but do note **you can not turn on or off the AI for the discord bot**.
 
 ## Current Active Bot Versions 
-**Discord Version**: 3.1
-**Twitch Version**: 3.1
+**Discord Version**: 3.2
+**Twitch Version**: 3.2
 
 ## My Socials
 
