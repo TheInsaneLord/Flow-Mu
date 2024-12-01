@@ -11,7 +11,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 bot = commands.Bot(command_prefix="?", case_insensitive=True, intents=intents)
-
+bot_ver = '3.2'
 
 bot_accept_names = ["flow-mu", "@flow-mu", "@flowmubot", "@FlowMuBot","@Flow-Mu Bot#7224", "@Flow-Mu Bot"] # Names AI will respond to
 ignore_users = [""]
@@ -400,6 +400,35 @@ async def on_message(message):
             print("Bot is turned off. Ignoring non-command message.")
             term_print("Bot is turned off. Ignoring non-command message.")
 
+@bot.event
+async def on_guild_join(guild):
+    preferred_channel_names = ["general", "welcome", "chat"]
+    channel = None
+
+    for preferred_name in preferred_channel_names:
+        for chan in guild.text_channels:
+            if chan.name == preferred_name and chan.permissions_for(guild.me).send_messages:
+                channel = chan
+                break
+        if channel:  # Stop if a preferred channel is found
+            break
+
+    if not channel:
+        for chan in guild.text_channels:
+            if chan.permissions_for(guild.me).send_messages:
+                channel = chan
+                break
+
+    # Send a welcome message if a channel was found
+    if channel:
+        await channel.send(
+            "*Flow-Mu shyly steps into the server, looking around with a soft smile.*\n"
+            "H-Hi, everyone! *blushes* I’m Flow-Mu! If you want to chat, just mention my name. "
+            "I’m here to keep everyone company and share some smiles! *giggles*"
+        )
+    else:
+        print(f"Unable to send a welcome message in {guild.name} as no suitable text channel was found.")
+
 #   |================================================================|
 #   |##################  Commands go below  ########################|
 #   |================================================================|
@@ -414,7 +443,7 @@ async def info(ctx):
 
     embed.add_field(name="owner:", value="The insane lord")
     embed.add_field(name="Coder:", value="The insane lord")
-    embed.add_field(name="Version:", value="3.1")
+    embed.add_field(name="Version:", value=bot_ver)
 
     await ctx.send(embed=embed)
 
@@ -491,7 +520,7 @@ async def tos(ctx, status=('x')):
             result = cursor.fetchone()
 
             if not result:
-                    # Insert new user agreement into tos_users table
+                # Insert new user agreement into tos_users table
                 cursor.execute(
                     'INSERT INTO tos_users (user_id, platform, username, agreed_at, agreed_version, status) VALUES (%s, %s, %s, NOW(), %s, %s)',
                     (user_id, platform, username, '1.0', True)
@@ -503,10 +532,11 @@ async def tos(ctx, status=('x')):
 
         except Error as e:
             print(f"Error sending message to database: {e}")
-            await ctx.send("Oh no, I am having some issues don't worry @the_insane_lord will look at it.")
+            await ctx.send("Oh no, I am having some issues don't worry @the_insane_lord will fix it.")
         finally:
             cursor.close()
             connection.close()
+        
     else:
         await ctx.send("You can find the ToS here: https://insane-servers.co.uk/flow-mu_tos. if you agree just do ?tos agree")
 
