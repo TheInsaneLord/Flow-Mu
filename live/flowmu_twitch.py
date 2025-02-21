@@ -10,7 +10,7 @@ import asyncio
 # global varebals
 bot_accept_names = ["flow-mu", "@flow-mu", "@flowmubot", "@FlowMuBot","@Flow-Mu Bot#7224", "@Flow-Mu Bot"] # Names AI will respond to
 ignore_users = ["streamelements", "flowmubot", "soundalerts", "nightbot"]
-bot_ver = '3.2'
+bot_ver = '3.3' # changed but not uploaded on 18/02/2025 remove note befor upload
 
 #   |================================================================|
 #   |##################   Configuration Below  ######################|
@@ -134,7 +134,6 @@ def send_status():
         cursor.close()
         connection.close()
 
-
 def term_print(data):
     tsp = time_stamp()
     connection = connect_to_db()
@@ -250,7 +249,6 @@ async def send_message(term_msg, message, user_message):
     cursor.close()
     connection.close()
     term_print(term_msg)
-
     
 async def response(message, response_to_id):
     global bot_info
@@ -332,7 +330,6 @@ async def response(message, response_to_id):
         # Ensure the cursor and connection are closed properly
         cursor.close()
         connection.close()
-
 
 async def periodic_check(interval):
     while True:
@@ -555,7 +552,7 @@ class Bot(commands.Bot):
             connection.close()
         
             term_print(f"Going to {channel}")
-            await ctx.send(f"Ok I will head over the {channel}. Hope they are playing some thing fun.")
+            await ctx.send(f"Ok I will head over to {channel}. Hope they are playing some thing fun.")
         else:
             term_print(f"Failed to go to: {channel}")
             await ctx.send("Hmm... did you for get to say what channel I should go to")
