@@ -1,6 +1,7 @@
 * means done
 + means working on curently
-- task/idea scraped or might be ad later
+- task/idea scraped or might be added later
+else task is planed but may not be add
 
 == Blender ==
 1. *import and link skirt armature
@@ -11,6 +12,7 @@
 6. make new clothing and other outfits for flow-mu
 7. create anamations for OBS
 8. add accesrys to curent flow-mu modle
+9. look into vtube stuideo implamentation and AI control (maybe use TTS script to control model)
 
 == code ==
 1. *add status for scripts and update websit to display it
@@ -28,11 +30,19 @@
 13. create momory system that allows notebel data to be sheared between chats. assing each messages with a tag from 0-5 to repesent importance of the data
 14. *fix issue with chat history and response_to_id where if chat histry is off bot errors as no ID is given
 15. fix the random reply posting being deleayed
-16. adjust AI perameters and add Lore catagory that contains lore relate information
+16. +adjust AI perameters and add Lore catagory that contains lore relate information
 17. add types on the function parameters
 18. *allow the requirement for ToS to be turned on and off
-19. +add notification when Flow-mu joins a channel and discord server
+19. *add notification when Flow-mu joins a channel and discord server
+20. add a relationship status to messages so users can build friendships or relationships with flow-mu (use a score between -1.000 to 1.000 0 is a neutral/default relationship)
+21. * Fix history bug where error is "Error retrieving chat history from database: 1054 (42S22): Unknown column 'id' in 'order clause'" # issue was with database timing error can be ignored for now 24/01/2025
+22. add a system that allows flow-mu to be asked to message users and repeat the users respons.
+23. *change Flow-mu TTS voice to new voice
+24. *make flow-mu tts voice dynamic (allow the waffles bot to follow flow-mu to other chanes)
+25. *Fix grammar issue when changing channels on the Twitch bot
+
 
 == Legal and other data ==
-1. create tos
+1. *create tos (created hosted on insane servers)
 2. look into a system that would allow for multible set animations to be interchanged in OBS allowing for idle anamations to be used for flow-mu
+3. *check streaming platform for ToS agenst AI use. (no rules agenst it for twitch or youtube)
