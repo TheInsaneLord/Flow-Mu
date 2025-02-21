@@ -8,8 +8,8 @@ This is the public side of the code for the Flow-Mu bot used on [The_Insane_Lord
 The latest place to find the code being used for flow mu is in the folder: [**live**](https://github.com/TheInsaneLord/Flow-Mu/tree/main/live). You can add Flow-Mu to your discord server with [this link](https://discord.com/oauth2/authorize?client_id=1258255735612117012&permissions=71680&integration_type=0&scope=bot) but do note **you can not turn on or off the AI for the discord bot**.
 
 ## Current Active Bot Versions 
-**Discord Version**: 3.2
-**Twitch Version**: 3.2
+**Discord Version**: 3.3
+**Twitch Version**: 3.3
 
 ## My Socials
 
@@ -19,11 +19,11 @@ The latest place to find the code being used for flow mu is in the folder: [**li
 
 ## FAQ
 
-#### Why can't I turn on the AI and why is it not on 24/7?
-The bot has been coded in a way so that when it is not in use it won't rack up bills and suddenly stop working 
+#### Why can't I turn on the AI
+The bot has been coded in a way so that when it is not in use it won't rack u bills and suddenly stop working 
 
 #### Can I copy the code to use in my own bot
-I would prefer you not to copy the complete code however I have no issue with you copying bits of the code to help get you started with your own bot.
+I would prefer you not to copy the complete code however I have no issue with you copying bits of the code to help get you started with your own bot. If you do use my code please provide a link to this GitHub
 
 ### If I do make my bot using some of your code do I have to credit you?
 If you have greatly adjusted the code then no, however, if it is just a copy and past please provide credit
@@ -33,8 +33,8 @@ As of version 3 of Flow-mu, a [Terms of Service](https://insane-servers.co.uk/fl
 
 ## Plans For the future
 ### What to expect for version 4 of Flow-mu
-Here is a list of features for the next vertion of Flow-mu
+Here is a list of features for the next version of Flow-mu
 - allow voice interaction
 - look into allowing her to do her own streams
-- create a custom voice for Flow-mu
+- <s>create a custom voice for Flow-mu</s> (Added Feb 2025)
 - animate the Flow-mu character model
