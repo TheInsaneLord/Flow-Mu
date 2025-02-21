@@ -11,7 +11,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 bot = commands.Bot(command_prefix="?", case_insensitive=True, intents=intents)
-bot_ver = '3.2'
+bot_ver = '3.3'
 
 bot_accept_names = ["flow-mu", "@flow-mu", "@flowmubot", "@FlowMuBot","@Flow-Mu Bot#7224", "@Flow-Mu Bot"] # Names AI will respond to
 ignore_users = [""]
@@ -189,6 +189,7 @@ async def send_message(term_msg, message, user_message):
         cursor.execute('SELECT * FROM tos_users WHERE user_id = %s AND platform = %s'
                         , (message.author.id, 'discord'))
         tos = cursor.fetchone()
+        response_to_id = 0
         print(tos)
         if tos:
             print("Sending message to AI Core.")
@@ -504,8 +505,9 @@ async def boop(ctx, user: str="x"):
             await ctx.send(f"Flow-mu succeeded in sneaking up and booping {user} on their nose.")
             await ctx.send(f"Ha ha ha I booped you {user}.")
 
-@bot.command()
-async def tos(ctx, status=('x')):
+#   USer ToS command
+@bot.hybrid_command(name="tos", pass_context=True)
+async def tos(ctx, status='x'):
     connection = connect_to_db()
     cursor = connection.cursor(dictionary=True)
     user_id = str(ctx.author.id)
