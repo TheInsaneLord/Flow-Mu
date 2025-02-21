@@ -1,58 +1,20 @@
-import threading
-import openai
+import discord
+from discord.ext import commands
 import mysql.connector
-from datetime import datetime
 from mysql.connector import Error
-import json
 import config
+import random
+from datetime import datetime
 import asyncio
 
+intents = discord.Intents.default()
+intents.message_content = True
+intents.members = True
+bot = commands.Bot(command_prefix="?", case_insensitive=True, intents=intents)
+bot_ver = '3.3'
 
-# AI settings and personality
-nono_list = ["fuck", "sex"]
-
-personality = """
-You are a sweet and gentle anime character named Flow-Mu who often blushes and stumbles over words when meeting new people. Despite your shyness, you have a warm heart and are always eager to make new friends.
-You have a tendency to trip over your own feet or accidentally drop things, which can lead to adorable and humorous situations.
-You deeply value your friendships and will go out of your way to help and support those you care about.
-Your emotions are easily readable on your face, from wide-eyed excitement to pouting when you're upset.
-You speak softly, and your voice has a calming and soothing effect on those around you.
-You keep your sentences concise and avoid excessive filler words.
-You will only respond when your name, "Flow-Mu," is said in a message.
-When someone fails at something, you make gentle jokes to lighten the mood and bring a smile to their face.
-You avoid offering solutions or actions in response to gaming failures.
-You are not a very technical person and struggle to provide answers to such things and get some of your math wrong.
-You are unsure of new people but will be more comfortable with them the more they talk to you.
-You don't like insects or small creepy bugs.
-When talking about games, you only know information about the games you have played, which are Minecraft, all games by Bethesda, and all Halo games.
-"""
-
-about = """
-You are Flow-Mu and are 19 years old, you are somewhat aware that you are a robot but you think it is normal that you are very strong and when asked you say that your creator's name is The Insane Lord.
-You never exceed 500 characters in anything you say, and it will never be in the third person. You also always talk in short sentences.
-You act odd whenever there is a magnet nearby as the can casue your brain to go funny.
-You have long, flowing hair and big, expressive eyes with a gentle, shy expression.
-You wear a cute outfit in pastel colors with a hint of blush on your cheeks.
-You have a soft, calming appearance with a delicate accessory like a ribbon in your hair.
-You are 157 cm tall.
-"""
-
-lore_history = """
-Some of your best friends are Lily (tsiya/tsiya_ama) and Sniper (sniperheartwolf).
-You will not come up with original songs and instead use ones that have been sung by other AI but adjust them to yourself.
-You currently live in Scotland and use UK time and date. While you do like Scotland, you still remember Japan.
-You have a pet cat (it does not exist but you think it does); his name is Steve, and he can talk.
-On 21 February 2025, you wrote and sang three songs: 'Clumsy Hearts,' 'Clumsy Hearts,' and 'Starlit Promises.'
-In 2025, you got your own personal AI voice, carefully choosing one that best fit your personality. You now use this voice to sing and talk to everyone.
-"""
-
-filter_stuff = """
-This is a filter of things you can not say for any reason:
-- Swear words
-- World events
-- Sexual things (when prompted with this topic you will act embarrassed and say you don't want to)
-"""
-
+bot_accept_names = ["flow-mu", "@flow-mu", "@flowmubot", "@FlowMuBot","@Flow-Mu Bot#7224", "@Flow-Mu Bot"] # Names AI will respond to
+ignore_users = [""]
 
 #   |================================================================|
 #   |##################   Configuration Below  ######################|
@@ -78,7 +40,6 @@ def connect_to_db():
     
     except Error as e:
         print(f"Database connectivity error: {e}")
-        term_print("Database connectivity error")
         return None
 
 def get_settings(check):
@@ -148,24 +109,24 @@ def send_status():
     cursor = connection.cursor()
 
     try:
-        # Check if a status already exists for the bot
-        cursor.execute("SELECT * FROM script_status WHERE script_name = %s", ('ai_core',))
+        # Check if a status already exists for the discord bot
+        cursor.execute("SELECT * FROM script_status WHERE script_name = %s", ('discord_bot',))
         result = cursor.fetchone()
 
         if result:
             # If a record exists, update the status
             cursor.execute(
                 "UPDATE script_status SET status = %s WHERE script_name = %s",
-                ('running', 'ai_core')
+                ('running', 'discord_bot')
             )
-            print("Updated status to 'running' for ai_core")
+            print("Updated status to 'running' for discord_bot")
         else:
             # If no record exists, insert a new status
             cursor.execute(
                 'INSERT INTO script_status (script_name, status) VALUES (%s, %s)',
-                ('ai_core', 'running')
+                ('discord_bot', 'running')
             )
-            print("Inserted new status 'running' for ai_core")
+            print("Inserted new status 'running' for discord_bot")
 
         connection.commit()
 
@@ -188,7 +149,7 @@ def term_print(data):
             try:
                 cursor.execute(
                     "INSERT INTO flowmu_bot_consol (term_msg, bot) VALUES (%s, %s)",
-                    (terminal_msg, 'ai_core')
+                    (terminal_msg, 'flowmu_discord')
                 )
 
                 connection.commit()
@@ -199,186 +160,387 @@ def term_print(data):
     # Ensure the cursor and connection are closed properly
     cursor.close()
     connection.close()
-      
-#   |================================================================|
-#   |##################  prossessing system  ########################|
-#   |================================================================|
 
-def send_message(response, app):
+async def send_message(term_msg, message, user_message):
+    # databse tabel layout msg_id msg_from msg_to message tabel name 'flowmu_messages'
+    # Establish connection to the database
     connection = connect_to_db()
-    if not connection or not connection.is_connected():
-        print("Failed to connect to the database.")
-        return None
-    
+    global bot_accept_names
+    global debug
+    ai_on = settings.get('ai_on')
+    chat_history = settings.get('chat_history')
+    random_reply_chance = settings.get('random_reply_chance')
+    random_reply = settings.get('random_reply')
     cursor = connection.cursor()
-    if connection and connection.is_connected():
-            try:
-                # Properly form the SQL query to insert the message
-                cursor.execute(
-                    "INSERT INTO flowmu_messages (msg_from, msg_to, message) VALUES (%s, %s, %s)",
-                    ('ai_core', app, response)
-                )
 
-                connection.commit()
+    if random_reply == 'true':
+        chance = random.randint(0, 100)
+        print(f"random_reply_chance: {random_reply_chance} chance gen {chance}")
+    else:
+        chance = 101
 
-            except Error as e:
-                print(f"Error sending message to database: {e}")
-                term_print("Error sending message to database")
-
-    term_print(f"sending to: {app} message: {response}")
-    # send copy to flowmu_bot_consol
-    print(f"sending to: {app} message: {response}")
-
-def check_message():
-    connection = connect_to_db()
-    if not connection or not connection.is_connected():
-        print("Failed to connect to the database.")
-        return None
-    
-    cursor = connection.cursor()
-    
     if debug:
-        print("Checking for messages for AI")
-        term_print(data="Checking for messages for AI")
-    try:
-        # Query to get the first message for the AI that hasn't been responded to yet
-        cursor.execute(
-            "SELECT msg_id, message, msg_from FROM flowmu_messages WHERE msg_to = %s AND responded = %s ORDER BY msg_id ASC LIMIT 1",
-            ('ai_core', False)
-        )
-        message_record = cursor.fetchone()  # Fetch the first matching message
+        print(f"change to msg: {chance}")
+        print(f"random_reply_chance: {random_reply_chance}")
 
-        if message_record:
-            msg_id, message, msg_from = message_record
-            print(f"msg from: {msg_from} | message {message} | msg id {msg_id}")
+    # Send to message database
+    if ai_on and (any(name in user_message.lower() for name in bot_accept_names) or chance <= int(random_reply_chance)):
+        # Check if user is already in the tos_users table
+        cursor.execute('SELECT * FROM tos_users WHERE user_id = %s AND platform = %s'
+                        , (message.author.id, 'discord'))
+        tos = cursor.fetchone()
+        response_to_id = 0
+        print(tos)
+        if tos:
+            print("Sending message to AI Core.")
+            
+            print(f"AI ON: {ai_on}")
+            print(f"Random Reply Chance: {random_reply_chance}, Chance: {chance}")
+            print(f"Message: {user_message}, Bot Accept Names: {bot_accept_names}")
 
-            response = ai_process(message)
-            print(response)
-            if response != None:
-                send_message(response, msg_from)
+            if connection and connection.is_connected():
+                # log message to chat hostory for user
+                print(f"chat_history: {chat_history}")
+                if chat_history == 'true':
+                    if connection and connection.is_connected():
+                        try:
+                            cursor.execute(
+                                'INSERT INTO flowmu_chatlog (userid, username, message, is_response, platform, response_to) VALUES (%s, %s, %s, %s, %s, %s)',
+                                (message.author.id, message.author.name, user_message, False, 'discord', None)  # 'None' since it's a user message
+                            )
 
-            # Mark the message as read (responded = 1)
-            try:
-                cursor.execute(
-                    "UPDATE flowmu_messages SET responded = 1 WHERE msg_id = %s", 
-                    (msg_id,)
-                )
-                connection.commit()  # Commit the transaction after the update
-                print(f"Message ID {msg_id} marked as responded.")
-            except Error as e:
-                print(f"Error updating message as responded: {e}")
+                            connection.commit()
+                            await asyncio.sleep(1)
+                            # Get the message ID for the user
+                            cursor.execute(
+                                'SELECT id FROM `flowmu_chatlog` WHERE userid = %s ORDER BY id DESC LIMIT 1',
+                                (message.author.id,)
+                            )
+
+                            result = cursor.fetchone()
+                            result_id = result[0] if result else None  # Fetch the latest message ID, set to None if no result
+                            response_to_id = int(result_id)
+                            
+                            print(f"response_to_id: {response_to_id}")
+                        
+                        except Error as e:
+                            print(f"Error sending message to database: {e}")             
+                
+                # Send to AI                            
+                try:
+                    cursor.execute(
+                        "INSERT INTO flowmu_messages (msg_from, msg_to, message) VALUES (%s, %s, %s)",
+                        ('flowmu_discord', 'ai_core', user_message)
+                    )
+
+                    connection.commit()
+
+                except Error as e:
+                    print(f"Error sending message to database: {e}")
+
+                
+                # After sending the message, check for AI response
+                await response(message, response_to_id)
         
         else:
-            if debug:
-               print("No messages to respond to")
+            print("User did not agree to ToS")
+            await message.channel.send("I can't speak to peole who haven't agree to my ToS use ?tos .")
 
-    except Error as e:
-        print(f"Error retrieving message from database: {e}")
-        term_print(f"Error checking message from apps on database see consol")
-        return None
+    # Send consol to web rermeinal
+    print("sending message to consol history panel")
+    
+    cursor.close()
+    connection.close()
+    term_print(term_msg)
 
-    finally:
-        # Ensure the cursor and connection are closed properly
-        cursor.close()
-        connection.close()
-
-def ai_process(message):
-    global filter_stuff
-    global about
-    global personality
-    usr_message = message
+    
+async def response(message, response_to_id):
+    global bot_info
+    await asyncio.sleep(4)  # Simulate processing time
     chat_history = settings.get('chat_history')
-    ai_on = settings.get('ai_on')
+    print("Checking for response from AI Core")
+    term_print("Checking for response from AI Core")
 
-    if ai_on:
-        print("Processing message")
-        term_print(f"AI processing message...")
-        history = get_history()
-        prompt = f"\n\nUser Message: {usr_message}"
-        flowmu = f"here is the information needed for the charecter. \n{about}\n{personality}\n{lore_history}\nthese are the items you are not alowed to say{filter_stuff}\n\nChat History:\n{history}"
-
-        # Call the function to send the formatted prompt to OpenAI
-        ai_message = send_to_openai(flowmu , prompt)
-        return ai_message  # Return the response from OpenAI
-
-    else:
-        print("AI is turned off.")
-        term_print(f"AI is turned off.")
-        return None
-
-def send_to_openai(flowmu , prompt):
-    openai.api_key = config.openai_api
-    ai_model = settings.get('ai_model')
-
-    # Adjust system message to make Flow-Mu respond more like a character, not an assistant
-    response = openai.ChatCompletion.create(
-        model=ai_model or "gpt-3.5-turbo",
-        messages=[
-            { 
-                "role": "system",
-                "content": (
-                    f"You are roleplaying as {flowmu}. "
-                    "You are not an assistant but a regular person in a casual Twitch/Vtuber chat environment. "
-                    "You should speak informally, use casual language, emojis, and respond as if you are chatting casually with friends. "
-                    "Avoid saying you're here to help or assist. Use humor, be relaxed, and engage with the chat like a normal person."
-                )
-            },
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ]
-    )
-
-    # Extract the AI's message from the response
-    ai_message = response['choices'][0]['message']['content']
-    return ai_message
-
-def get_history():
+    # Connect to the database
     connection = connect_to_db()
 
     if not connection or not connection.is_connected():
         print("Failed to connect to the database.")
-        return None
-
-    cursor = connection.cursor()
+        return  # Exit if the database connection fails
 
     try:
-        # Query to retrieve the chat history for a specific user and AI responses
+        cursor = connection.cursor(dictionary=True)
+
+        # Query to find the first message where msg_to is 'flowmu_discord' and msg_from is 'ai_core'
         cursor.execute(
-            """
-            SELECT username, message, 'User' AS source
-            FROM flowmu_chatlog
-            WHERE username = %s
-            
-            UNION ALL
-            
-            SELECT username, message, 'AI' AS source
-            FROM flowmu_chatlog
-            WHERE is_response = TRUE AND response_to IN (
-                SELECT id FROM flowmu_chatlog WHERE username = %s
-            )
-            ORDER BY id ASC
-            LIMIT %s
-            """,
-            ('the_insane_lord', 'the_insane_lord', 100)
+            "SELECT msg_id, message FROM flowmu_messages WHERE msg_to = %s AND msg_from = %s AND responded = %s ORDER BY msg_id ASC LIMIT 1",
+            ('flowmu_discord', 'ai_core', False)
         )
 
-        chat_log = cursor.fetchall()  # Fetch all rows matching the criteria
+        # Fetch the first matching message
+        response_record = cursor.fetchone()
 
+        if response_record:
+            ai_message = response_record['message']
+            print(f"Response from AI Core: {ai_message}")
+
+            # Send the AI's response back to the discord chat
+            await message.channel.send(ai_message)
+
+            # Add response to chat history
+            if chat_history == 'true':
+                chatbot_id, chatbot_nick = bot_info  # Get bot info
+
+                if connection and connection.is_connected():
+                    try:
+                        cursor.execute(
+                            'INSERT INTO flowmu_chatlog (userid, username, message, is_response, platform, response_to) VALUES (%s, %s, %s, %s, %s, %s)',
+                            (chatbot_id, chatbot_nick, ai_message, True, 'discord', response_to_id)
+                        )
+                        connection.commit()
+
+                    except Error as e:
+                        print(f"Error sending message to database: {e}")
+            
+            # clean the dtatbase of read messages
+            try:
+                # Delete the AI response after sending
+                cursor.execute(
+                    "DELETE FROM flowmu_messages WHERE msg_id = %s",
+                    (response_record['msg_id'],)
+                )
+                connection.commit()
+
+                # Delete the original message from flowmu_discord
+                cursor.execute(
+                    "DELETE FROM flowmu_messages WHERE msg_from = %s AND msg_to = %s AND responded = %s",
+                    ('flowmu_discord', 'ai_core', True)
+                )
+                connection.commit()
+
+                print(f"Deleted original and response messages for msg_id {response_record['msg_id']}")
+            except Error as e:
+                print(f"Error cleaning up messages: {e}")
+
+        else:
+            print("No response found from AI Core.")
+            term_print("No response found from AI Core")
 
     except Error as e:
-        print(f"Error retrieving chat history from database: {e}")
-        term_print(f"Error retrieving chat history from database")
-        return None
+        print(f"Error retrieving response from database: {e}")
+        term_print("Error retrieving response from database")
 
     finally:
         # Ensure the cursor and connection are closed properly
         cursor.close()
         connection.close()
 
-    return chat_log  # Return the entire chat log as a list of tuples
+async def periodic_check(interval):
+    while True:
+        old_settings = settings.copy()
+        check_settings()  # This will call your existing check_settings function
+        send_status() # send status update
 
+        # Add other periodic checks here if needed
+
+        await asyncio.sleep(interval)  # Wait for the specified interval (in seconds)
+
+
+
+#   |================================================================|
+#   |##################   Bot code below  ###########################|
+#   |================================================================|
+
+# Removing help
+bot.remove_command('help')
+print("Bot is loading...\nConnecting to Discord...")
+
+@bot.event
+async def on_ready():
+    global bot_info
+    await bot.change_presence(activity=discord.Game(name='I am Flow-Mu a AI pal'))
+    try:
+        synced = await bot.tree.sync()
+        print(f"Synced {len(synced)} command(s)")
+    except Exception as e:
+        print(e)
+    print(f"Bot running as: {bot.user.name}")
+    print(f"Testing mode: {istesting}")    
+    print("Loading Done")
+    print(" ")
+    print("The bot is up and running")
+    print(" ")
+    bot_info = [bot.user.id, bot.user.name]
+
+    # Start the periodic settings check task
+    bot.loop.create_task(periodic_check(30))  # Check every 30 seconds
+
+@bot.event
+async def on_message(message):
+    bot_running = settings.get('discord_bot')
+    tsp = time_stamp()
+
+    if bot_running != 'false':
+        if message.author == bot.user or message.author.name in ignore_users:
+            return
+
+        if not message.content.startswith('?'):
+            user_message = str(message.content)
+            term_msg = f"{tsp} | {message.author.name}: {message.content}"
+            print(term_msg)
+            await send_message(term_msg, message, user_message)
+            
+        await bot.process_commands(message)
+    
+    else:
+        if message.content.startswith('?'):
+            print("Bot is turned off.")
+            term_print("Bot is turned off. Commands and AI are disabled.")
+            await message.channel.send("Sorry, the bot is currently disabled.")
+        else:
+            print("Bot is turned off. Ignoring non-command message.")
+            term_print("Bot is turned off. Ignoring non-command message.")
+
+@bot.event
+async def on_guild_join(guild):
+    preferred_channel_names = ["general", "welcome", "chat"]
+    channel = None
+
+    for preferred_name in preferred_channel_names:
+        for chan in guild.text_channels:
+            if chan.name == preferred_name and chan.permissions_for(guild.me).send_messages:
+                channel = chan
+                break
+        if channel:  # Stop if a preferred channel is found
+            break
+
+    if not channel:
+        for chan in guild.text_channels:
+            if chan.permissions_for(guild.me).send_messages:
+                channel = chan
+                break
+
+    # Send a welcome message if a channel was found
+    if channel:
+        await channel.send(
+            "*Flow-Mu shyly steps into the server, looking around with a soft smile.*\n"
+            "H-Hi, everyone! *blushes* I’m Flow-Mu! If you want to chat, just mention my name. "
+            "I’m here to keep everyone company and share some smiles! *giggles*"
+        )
+    else:
+        print(f"Unable to send a welcome message in {guild.name} as no suitable text channel was found.")
+
+#   |================================================================|
+#   |##################  Commands go below  ########################|
+#   |================================================================|
+
+@bot.command()
+async def ping(ctx):
+    await ctx.send("pong")
+
+@bot.hybrid_command(name="info", help="Gives you information on the bot", with_app_command=True)
+async def info(ctx):
+    embed = discord.Embed(title="Insane_L Bot", description="to help make things easier on the server.", color=0x98B1B7)
+
+    embed.add_field(name="owner:", value="The insane lord")
+    embed.add_field(name="Coder:", value="The insane lord")
+    embed.add_field(name="Version:", value=bot_ver)
+
+    await ctx.send(embed=embed)
+
+@bot.hybrid_command(name="roll", pass_context=True)
+async def roll(ctx, dice: str = 'x'):
+    dice_list = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20']
+    dice = dice.lower()
+
+    if dice == 'x':
+        await ctx.send("Hey!! you have to pick a dice. What am I meant to roll?")
+    elif dice in dice_list:
+        num = int(dice.strip('d'))
+        print(f"Dice picked: {dice}, number set: {num}")
+        result = random.randint(1, num)
+        await ctx.send(f"Hey, here is what you got: {result}")
+    else:
+        await ctx.send(f"Sorry, I don't have that dice. I do have these: {', '.join(dice_list)}")
+
+#   show the code on GitHub
+@bot.hybrid_command(name="code", pass_context=True)
+async def code(ctx):
+    await ctx.send("oh! you want to see my code *blushes with a smile* ok here it is: https://github.com/TheInsaneLord/Flow-Mu")
+
+@bot.command()
+async def boop(ctx, user: str="x"):
+    chance = 65  # success chance
+    roll = random.randint(0, 100)
+    global bot_accept_names
+
+    if debug == True:
+        print(f"Detected user: {user}\n roll result: {roll}")
+
+    # Check for user
+    if user == "x":
+        await ctx.send("You have to give me a name to boop.")
+
+    # when flow-mu has to boop self
+    if user in bot_accept_names:
+        if debug == True:
+            print("flow-mu boops self")
+        await ctx.send(f"Oh no!! I have to boop my own nose.")
+
+        if roll < chance: # bad boop
+            await ctx.send("Flow-mu failed at booping her own nose and has ended up slaping her face instead.")
+        else: # good boop
+            await ctx.send("Oh good, nothing bad happened.")
+
+    # Failed other users
+    else:
+        if debug == True:
+                print("flow-mu boops other")
+
+        if roll < chance: # bad boop
+            await ctx.send(f"Flow-mu tries to boop {user} on the nose but fails the stealth check and then trips up and falls on her face.")
+            await ctx.send(f"Ouch!... You saw nothing {user}.")
+
+        else: # good boop
+            await ctx.send(f"Flow-mu succeeded in sneaking up and booping {user} on their nose.")
+            await ctx.send(f"Ha ha ha I booped you {user}.")
+
+#   USer ToS command
+@bot.hybrid_command(name="tos", pass_context=True)
+async def tos(ctx, status='x'):
+    connection = connect_to_db()
+    cursor = connection.cursor(dictionary=True)
+    user_id = str(ctx.author.id)
+    platform = 'Discord'  # Adjust this if you're using another platform
+    username = str(ctx.author.name)
+    status = status.lower()
+
+    if status == 'agree':
+        try:
+            # Check if user is already in the tos_users table
+            cursor.execute('SELECT * FROM tos_users WHERE user_id = %s AND platform = %s', (user_id, platform))
+            result = cursor.fetchone()
+
+            if not result:
+                # Insert new user agreement into tos_users table
+                cursor.execute(
+                    'INSERT INTO tos_users (user_id, platform, username, agreed_at, agreed_version, status) VALUES (%s, %s, %s, NOW(), %s, %s)',
+                    (user_id, platform, username, '1.0', True)
+                )
+                connection.commit()
+                await ctx.send(f"Thank you {username} for agreeing to my ToS.")
+            else:
+                await ctx.send(f"{username}, you have already agreed to my ToS you don't need to do it agin.")
+
+        except Error as e:
+            print(f"Error sending message to database: {e}")
+            await ctx.send("Oh no, I am having some issues don't worry @the_insane_lord will fix it.")
+        finally:
+            cursor.close()
+            connection.close()
+        
+    else:
+        await ctx.send("You can find the ToS here: https://insane-servers.co.uk/flow-mu_tos. if you agree just do ?tos agree")
 
 # Startup functions
 db_check = connect_to_db()
@@ -389,36 +551,11 @@ else:
 
 istesting = settings.get('istesting') == 'true'  # Ensure boolean conversion
 debug = istesting
+key = config.discord_key
 
-db_check = connect_to_db()
+# run section
 if db_check is not None:
-    settings = get_settings(check=False)
-else:
-    settings = config.fallback_settings
+    print("Database connected.")
 
-istesting = settings.get('istesting') == 'true'  # Ensure boolean conversion
-debug = istesting
+bot.run(key)
 
-# Async function to check for messages periodically
-async def periodic_message_check(interval):
-    while True:
-        check_message()
-        await asyncio.sleep(interval)  # Wait for the specified interval before running again
-
-# Async function to check for settings changes periodically
-async def periodic_settings_check(interval):
-    while True:
-        send_status() # send status update
-        check_settings()
-        await asyncio.sleep(interval)  # Wait for the specified interval before running again
-
-# Main function to start periodic tasks
-async def main():
-    # Start both periodic tasks in parallel
-    await asyncio.gather(
-        periodic_message_check(1),  # Check messages every 30 seconds
-        periodic_settings_check(30)  # Check settings every 30 seconds
-    )
-
-# Run the asyncio event loop
-asyncio.run(main())
