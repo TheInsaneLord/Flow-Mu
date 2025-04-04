@@ -8,9 +8,9 @@ from datetime import datetime
 import asyncio
 
 # global varebals
-bot_accept_names = ["flow-mu", "@flow-mu", "@flowmubot", "@FlowMuBot","@Flow-Mu Bot#7224", "@Flow-Mu Bot"] # Names AI will respond to
+bot_accept_names = ["flow-mu", "@flow-mu", "@flowmubot", "@FlowMuBot","@Flow-Mu Bot#7224", "@Flow-Mu Bot", "flowmu", "flowmubot"] # Names AI will respond to
 ignore_users = ["streamelements", "flowmubot", "soundalerts", "nightbot"]
-bot_ver = '3.3' # changed but not uploaded on 18/02/2025 remove note befor upload
+bot_ver = '3.4'
 
 #   |================================================================|
 #   |##################   Configuration Below  ######################|
@@ -161,7 +161,7 @@ async def send_message(term_msg, message, user_message):
     # Establish connection to the database
     connection = connect_to_db()
     global bot_accept_names
-    global debug
+    global debug_mode
     ai_on = settings.get('ai_on')
     chat_history = settings.get('chat_history')
     random_reply_chance = settings.get('random_reply_chance')
@@ -175,7 +175,7 @@ async def send_message(term_msg, message, user_message):
     else:
         chance = 101
 
-    if debug:
+    if debug_mode:
         print(f"change to msg: {chance}")
         print(f"random_reply_chance: {random_reply_chance}")
 
@@ -196,14 +196,27 @@ async def send_message(term_msg, message, user_message):
             print(f"Message: {user_message}, Bot Accept Names: {bot_accept_names}")
 
             if connection and connection.is_connected():
+                                # Send to AI                            
+                try:
+                    cursor.execute(
+                        "INSERT INTO flowmu_messages (msg_from, msg_to, message) VALUES (%s, %s, %s)",
+                        ('flowmu_twitch', 'ai_core', user_message)
+                    )
+
+                    connection.commit()
+
+                except Error as e:
+                    print(f"Error sending message to database: {e}")
+
                 # log message to chat hostory for user
                 print(f"chat_history: {chat_history}")
                 if chat_history == 'true':
                     if connection and connection.is_connected():
                         try:
+                            await asyncio.sleep(1) #Let the AI process the las message then add the curent on to history
                             cursor.execute(
                                 'INSERT INTO flowmu_chatlog (userid, username, message, is_response, platform, response_to) VALUES (%s, %s, %s, %s, %s, %s)',
-                                (message.author.id, message.author.name, user_message, False, 'twitch', None)  # 'None' since it's a user message
+                                (message.author.id, message.author.name, user_message, False, 'discord', None)  # 'None' since it's a user message
                             )
 
                             connection.commit()
@@ -223,25 +236,12 @@ async def send_message(term_msg, message, user_message):
                         except Error as e:
                             print(f"Error sending message to database: {e}")             
                 
-                # Send to AI                            
-                try:
-                    cursor.execute(
-                        "INSERT INTO flowmu_messages (msg_from, msg_to, message) VALUES (%s, %s, %s)",
-                        ('flowmu_twitch', 'ai_core', user_message)
-                    )
-
-                    connection.commit()
-
-                except Error as e:
-                    print(f"Error sending message to database: {e}")
-
-                
                 # After sending the message, check for AI response
                 await response(message, response_to_id) # need to create dummy value
         
         else:
             print("User did not agree to ToS")
-            await message.channel.send("I can't speak to peole who haven't agree to my ToS use ?tos .")
+            await message.channel.send("I can't speak to peole who haven't agree to my ToS use ?tos link or ?tos agree.")
 
     # Send consol to web rermeinal
     print("sending message to consol history panel")
@@ -359,14 +359,14 @@ if db_check is not None:
 else:
     settings = config.fallback_settings
 
-istesting = settings.get('istesting') == 'true'  # Ensure boolean conversion
-debug = istesting
+testing_mode= settings.get('testing_mode') == 'true'  # Ensure boolean conversion
+debug_mode = settings.get('debug_mode') == 'true'
 
 #   |================================================================|
 #   |##################   Bot code below  ###########################|
 #   |================================================================|
 
-if istesting:
+if testing_mode:
     chat_channel = ['flowmubot']
     oauth_token = config.twitch_testing_oauth
 else:
@@ -386,7 +386,7 @@ class Bot(commands.Bot):
         print(f'\nLogged in as | {self.nick}')
         print(f'User id is | {self.user_id}')
         print(f"listening on: {self.current_channels}")  # Ensure this reflects the current channels
-        print(f"Testing mod: {istesting}")
+        print(f"Testing mod: {testing_mode}")
         print("The Bot is up and running.\n")
 
         # Save bot information globally
@@ -404,13 +404,13 @@ class Bot(commands.Bot):
         if isinstance(new_channels, str):
             new_channels = [new_channels]  # Convert the string to a list containing one element
 
-        # Debugging point to check what is being passed
+        # debug_modeging point to check what is being passed
         print(f"Updating channels: {new_channels} (type: {type(new_channels)})")
 
         if new_channels != self.current_channels:
             # Leave the current channels
             for channel in self.current_channels:
-                print(f"Leaving channel: {channel}")  # Debug print for leaving
+                print(f"Leaving channel: {channel}")  # debug_mode print for leaving
                 await self.part_channels([f"#{channel.lstrip('#')}"])  # Ensure part works with proper format            # Join the new channels, ensure the channel has a '#' prefix
 
             for channel in new_channels:
@@ -470,7 +470,7 @@ class Bot(commands.Bot):
 #   info command
     @commands.command()
     async def info(self, ctx: commands.Context):
-        await ctx.send(f'My name is Flow-Mu I am a AI bot that is a friend for the chat if you want to see how I work then use ?code I am currently in Version: ', bot_ver)
+         await ctx.send(f'My name is Flow-Mu. I am an AI bot that is a friend for the chat. If you want to see how I work, use ?code. I am currently in Version: {bot_ver}')
 
 #    DnD dice roll
     @commands.command()
@@ -482,7 +482,7 @@ class Bot(commands.Bot):
             await ctx.send("Hey!! you have to pick a dice. What am I meant to roll?")
         elif dice in dice_list:
             num = int(dice.strip('d'))
-            if debug == True:
+            if debug_mode == True:
                 print(f"Dice picked: {dice}, number set: {num}")
             result = random.randint(1, num)
             await ctx.send(f"Hey, here is what you got: {result}")
@@ -499,7 +499,7 @@ class Bot(commands.Bot):
         roll = random.randint(0, 100)
         global bot_accept_names
 
-        if debug == True:
+        if debug_mode == True:
             print(f"Detected user: {user}\n roll result: {roll}")
 
         # Check for user
@@ -508,7 +508,7 @@ class Bot(commands.Bot):
 
         # when flow-mu has to boop self
         if user in bot_accept_names:
-            if debug == True:
+            if debug_mode == True:
                 print("flow-mu boops self")
             await ctx.send(f"Oh no!! I have to boop my own nose.")
 
@@ -519,7 +519,7 @@ class Bot(commands.Bot):
 
         # Failed other users
         else:
-            if debug == True:
+            if debug_mode == True:
                     print("flow-mu boops other")
 
             if roll < chance: # bad boop
