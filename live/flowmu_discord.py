@@ -11,9 +11,9 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 bot = commands.Bot(command_prefix="?", case_insensitive=True, intents=intents)
-bot_ver = '3.3'
+bot_ver = '3.4'
 
-bot_accept_names = ["flow-mu", "@flow-mu", "@flowmubot", "@FlowMuBot","@Flow-Mu Bot#7224", "@Flow-Mu Bot"] # Names AI will respond to
+bot_accept_names = ["flow-mu", "@flow-mu", "@flowmubot", "@FlowMuBot","@Flow-Mu Bot#7224", "@Flow-Mu Bot", "flowmu", "flowmubot"] # Names AI will respond to
 ignore_users = [""]
 
 #   |================================================================|
@@ -166,7 +166,7 @@ async def send_message(term_msg, message, user_message):
     # Establish connection to the database
     connection = connect_to_db()
     global bot_accept_names
-    global debug
+    global debug_mode
     ai_on = settings.get('ai_on')
     chat_history = settings.get('chat_history')
     random_reply_chance = settings.get('random_reply_chance')
@@ -179,9 +179,11 @@ async def send_message(term_msg, message, user_message):
     else:
         chance = 101
 
-    if debug:
+    if debug_mode:
         print(f"change to msg: {chance}")
         print(f"random_reply_chance: {random_reply_chance}")
+        term_print(f"change to msg: {chance}")
+        term_print(f"random_reply_chance: {random_reply_chance}")
 
     # Send to message database
     if ai_on and (any(name in user_message.lower() for name in bot_accept_names) or chance <= int(random_reply_chance)):
@@ -198,12 +200,25 @@ async def send_message(term_msg, message, user_message):
             print(f"Random Reply Chance: {random_reply_chance}, Chance: {chance}")
             print(f"Message: {user_message}, Bot Accept Names: {bot_accept_names}")
 
-            if connection and connection.is_connected():
+            if connection and connection.is_connected():             
+                # Send to AI                            
+                try:
+                    cursor.execute(
+                        "INSERT INTO flowmu_messages (msg_from, msg_to, message, user) VALUES (%s, %s, %s, %s)",
+                        ('flowmu_discord', 'ai_core', user_message, message.author.name)
+                    )
+
+                    connection.commit()
+
+                except Error as e:
+                    print(f"Error sending message to database: {e}")
+
                 # log message to chat hostory for user
                 print(f"chat_history: {chat_history}")
                 if chat_history == 'true':
                     if connection and connection.is_connected():
                         try:
+                            await asyncio.sleep(1) #Let the AI process the las message then add the curent on to history
                             cursor.execute(
                                 'INSERT INTO flowmu_chatlog (userid, username, message, is_response, platform, response_to) VALUES (%s, %s, %s, %s, %s, %s)',
                                 (message.author.id, message.author.name, user_message, False, 'discord', None)  # 'None' since it's a user message
@@ -224,27 +239,14 @@ async def send_message(term_msg, message, user_message):
                             print(f"response_to_id: {response_to_id}")
                         
                         except Error as e:
-                            print(f"Error sending message to database: {e}")             
-                
-                # Send to AI                            
-                try:
-                    cursor.execute(
-                        "INSERT INTO flowmu_messages (msg_from, msg_to, message) VALUES (%s, %s, %s)",
-                        ('flowmu_discord', 'ai_core', user_message)
-                    )
+                            print(f"Error sending message to database: {e}")   
 
-                    connection.commit()
-
-                except Error as e:
-                    print(f"Error sending message to database: {e}")
-
-                
                 # After sending the message, check for AI response
                 await response(message, response_to_id)
         
         else:
             print("User did not agree to ToS")
-            await message.channel.send("I can't speak to peole who haven't agree to my ToS use ?tos .")
+            await message.channel.send("I can't speak to peole who haven't agree to my ToS use ?tos link or ?tos agree.")
 
     # Send consol to web rermeinal
     print("sending message to consol history panel")
@@ -365,7 +367,8 @@ async def on_ready():
     except Exception as e:
         print(e)
     print(f"Bot running as: {bot.user.name}")
-    print(f"Testing mode: {istesting}")    
+    print(f"Testing mode: {testing_mode}") 
+    print(f"Debug mode mode {debug_mode}")   
     print("Loading Done")
     print(" ")
     print("The bot is up and running")
@@ -379,9 +382,18 @@ async def on_ready():
 async def on_message(message):
     bot_running = settings.get('discord_bot')
     tsp = time_stamp()
+    # Convert testing server ID to integer for proper comparison
+    serverid = int(config.discord_testing_server)
 
+    # testing_mode should be a boolean (set at startup, e.g. testing_mode = settings.get('testing_mode') == 'true')
     if bot_running != 'false':
         if message.author == bot.user or message.author.name in ignore_users:
+            return
+        
+        if testing_mode and message.guild.id != serverid:
+            print("Testing mode is enabled; message ignored from this server.")
+            term_print("Testing mode is enabled; message ignored from this server.")
+            await message.channel.send("I am in testing mode and can't respond right now.")
             return
 
         if not message.content.startswith('?'):
@@ -440,7 +452,7 @@ async def ping(ctx):
 
 @bot.hybrid_command(name="info", help="Gives you information on the bot", with_app_command=True)
 async def info(ctx):
-    embed = discord.Embed(title="Insane_L Bot", description="to help make things easier on the server.", color=0x98B1B7)
+    embed = discord.Embed(title="Insane_L Bot", description="My name is Flow-Mu I am a AI bot that is a friend for the chat if you want to check out my code then use ?code .", color=0x98B1B7)
 
     embed.add_field(name="owner:", value="The insane lord")
     embed.add_field(name="Coder:", value="The insane lord")
@@ -474,7 +486,7 @@ async def boop(ctx, user: str="x"):
     roll = random.randint(0, 100)
     global bot_accept_names
 
-    if debug == True:
+    if debug_mode == True:
         print(f"Detected user: {user}\n roll result: {roll}")
 
     # Check for user
@@ -483,7 +495,7 @@ async def boop(ctx, user: str="x"):
 
     # when flow-mu has to boop self
     if user in bot_accept_names:
-        if debug == True:
+        if debug_mode == True:
             print("flow-mu boops self")
         await ctx.send(f"Oh no!! I have to boop my own nose.")
 
@@ -494,7 +506,7 @@ async def boop(ctx, user: str="x"):
 
     # Failed other users
     else:
-        if debug == True:
+        if debug_mode == True:
                 print("flow-mu boops other")
 
         if roll < chance: # bad boop
@@ -549,8 +561,8 @@ if db_check is not None:
 else:
     settings = config.fallback_settings
 
-istesting = settings.get('istesting') == 'true'  # Ensure boolean conversion
-debug = istesting
+testing_mode= settings.get('testing_mode') == 'true'  # Ensure boolean conversion
+debug_mode = settings.get('debug_mode') == 'true'
 key = config.discord_key
 
 # run section
