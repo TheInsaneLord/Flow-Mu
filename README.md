@@ -35,6 +35,6 @@ As of version 3 of Flow-mu, a [Terms of Service](https://insane-servers.co.uk/fl
 ### What to expect for version 4 of Flow-mu
 Here is a list of features for the next version of Flow-mu
 - allow voice interaction
-- look into allowing her to do her own streams
+- setup stuff to allow her to do her own streams
 - <s>create a custom voice for Flow-mu</s> (Added Feb 2025)
 - <s>animate the Flow-mu character model</s> (Added Apr 2025)
