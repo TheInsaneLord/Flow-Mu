@@ -8,8 +8,8 @@ This is the public side of the code for the Flow-Mu bot used on [The_Insane_Lord
 The latest place to find the code being used for flow mu is in the folder: [**live**](https://github.com/TheInsaneLord/Flow-Mu/tree/main/live). You can add Flow-Mu to your discord server with [this link](https://discord.com/oauth2/authorize?client_id=1258255735612117012&permissions=71680&integration_type=0&scope=bot) but do note **you can not turn on or off the AI for the discord bot**.
 
 ## Current Active Bot Versions 
-**Discord Version**: 3.3
-**Twitch Version**: 3.3
+**Discord Version**: 3.4
+**Twitch Version**: 3.4
 
 ## My Socials
 
@@ -37,4 +37,4 @@ Here is a list of features for the next version of Flow-mu
 - allow voice interaction
 - look into allowing her to do her own streams
 - <s>create a custom voice for Flow-mu</s> (Added Feb 2025)
-- animate the Flow-mu character model
+- <s>animate the Flow-mu character model</s> (Added Apr 2025)
