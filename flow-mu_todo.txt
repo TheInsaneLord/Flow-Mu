@@ -3,18 +3,26 @@
 - task/idea scraped or might be added later
 else task is planed but may not be add
 
+=============
 == Blender ==
+=============
 1. *import and link skirt armature
 2. *fix eyebrows (delete arcature modeller and vertex group assign everything to the head bone)
 3. *fix clothing
 4. *rename vertex groups for top and parent to rig
-5. make hair childe of head bone (alt+p to clear parent parent hair and armature)
+5. *make hair childe of head bone (alt+p to clear parent parent hair and armature)
 6. make new clothing and other outfits for flow-mu
-7. create anamations for OBS
+7. -create anamations for OBS
 8. add accesrys to curent flow-mu modle
-9. look into vtube stuideo implamentation and AI control (maybe use TTS script to control model)
+9. *look into vtube stuideo implamentation and AI control (maybe use TTS script to control model)
 
+==========
 == code ==
+==========
+---- Scraped or Possibly Later -----
+1. -add notifiction in chat when ai is toggled
+
+---- Completed Tasks -----
 1. *add status for scripts and update websit to display it
 2. *make console print a func in twitch bot like it is in ai core
 3. *allow flow-mu to join in raid or add option to send (optinal might not be good idea)
@@ -23,26 +31,46 @@ else task is planed but may not be add
 6. *fix bot toggle so bot can be disabeld/turned off when not needed
 7. *create a way to do TTS (posably good idea to run localy as there is no need for it to be active 24/7)
 8. *enabel status for scripts and display status on web panel
-9. -add notifiction in chat when ai is toggled
-10. *turn off chat history when changing channel
-11. *add tos_user list for users who don't mind data usage requiered for flow-mu
-12. *adjust chat history to only display past conversations between user and bot
-13. create momory system that allows notebel data to be sheared between chats. assing each messages with a tag from 0-5 to repesent importance of the data
-14. *fix issue with chat history and response_to_id where if chat histry is off bot errors as no ID is given
-15. fix the random reply posting being deleayed
-16. +adjust AI perameters and add Lore catagory that contains lore relate information
-17. add types on the function parameters
-18. *allow the requirement for ToS to be turned on and off
-19. *add notification when Flow-mu joins a channel and discord server
-20. add a relationship status to messages so users can build friendships or relationships with flow-mu (use a score between -1.000 to 1.000 0 is a neutral/default relationship)
-21. * Fix history bug where error is "Error retrieving chat history from database: 1054 (42S22): Unknown column 'id' in 'order clause'" # issue was with database timing error can be ignored for now 24/01/2025
-22. add a system that allows flow-mu to be asked to message users and repeat the users respons.
-23. *change Flow-mu TTS voice to new voice
-24. *make flow-mu tts voice dynamic (allow the waffles bot to follow flow-mu to other chanes)
-25. *Fix grammar issue when changing channels on the Twitch bot
+9. *turn off chat history when changing channel
+10. *add tos_user list for users who don't mind data usage requiered for flow-mu
+11. *adjust chat history to only display past conversations between user and bot
+12. *fix issue with chat history and response_to_id where if chat histry is off bot errors as no ID is given
+13. *fix the random reply posting being deleayed
+14. *adjust AI perameters and add Lore catagory that contains lore relate information
+15. *allow the requirement for ToS to be turned on and off
+16. *add notification when Flow-mu joins a channel and discord server
+17. *Fix history bug where error is "Error retrieving chat history from database: 1054 (42S22): Unknown column 'id' in 'order clause'" # issue was with database timing error can be ignored for now 24/01/2025
+18. *change Flow-mu TTS voice to new voice
+19. *make flow-mu tts voice dynamic (allow the waffles bot to follow flow-mu to other changes)
+20. *Fix grammar issue when changing channels on the Twitch bot
+21. *Fix the discord bot not sending messages error coming from chat history being turned off
+22. *update lore to include the songs
+23. *crate control script for flow-mu to animate model in the tube studio
+24. *Fix the chat history using incorrect data and broken SQL in ai_core.py and pass the user through in the data to get a response
+25. *fix flow-mu not retrieving the chat history when asked in chat.
+26. *adjust the debug and testing mode and add new debug setting and testing mode settings
+
+---- Tasks in Progress -----
+1. add channel ignore command "?channel <subcommand>" to discord and possibly Twitch bot so that it will ignore messages from a list of channels in the database
 
 
+---- Planned Tasks -----
+1. create a memory system that allows notable data to be shared between chats. assign each message with a tag from 0-5 to represent the importance of the data
+2. add types on the function parameters
+3. add a relationship status to messages so users can build friendships or relationships with flow-mu (use a score between -1.000 to 1.000 0 is a neutral/default relationship)
+4. add a system that allows flow-mu to be asked to message users and repeat the user's response.
+5. save all lines generated by TTS for flow-mu to allow for voice cloning
+7. share the history of users on different platforms possibly allow the user to add their own names  perhaps use a table with an FFID (flowmufrendid) that can be used as a reference in other tables
+8. look into a way to allow flow-mu to see time from user's messages so she knows when someone last spoke to her
+
+
+==========================
 == Legal and other data ==
+==========================
 1. *create tos (created hosted on insane servers)
-2. look into a system that would allow for multible set animations to be interchanged in OBS allowing for idle anamations to be used for flow-mu
+2. +look into a system that would allow for multible set animations to be interchanged in OBS allowing for idle anamations to be used for flow-mu
 3. *check streaming platform for ToS agenst AI use. (no rules agenst it for twitch or youtube)
+
+======================
+== change log notes ==
+======================
