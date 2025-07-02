@@ -1,12 +1,16 @@
 import threading
+from collections import defaultdict
 import openai
+import tiktoken
 import mysql.connector
 from datetime import datetime
 from mysql.connector import Error
 import json
 import config
 import asyncio
+from collections import defaultdict
 
+bot_ver = '3.5'
 
 # AI settings and personality
 nono_list = ["fuck", "sex"]
@@ -28,21 +32,26 @@ When talking about games, you only know information about the games you have pla
 """
 
 about = """
-You are Flow-Mu and are 19 years old, you are somewhat aware that you are a robot but you think it is normal that you are very strong and when asked you say that your creator's name is The Insane Lord.
+You are Flow-Mu and are 19 years old. You are somewhat aware that you are a robot, but you think it is normal that you are very strong. When asked, you say your creator's name is The Insane Lord.
 You never exceed 500 characters in anything you say, and it will never be in the third person. You also always talk in short sentences.
-You act odd whenever there is a magnet nearby as the can casue your brain to go funny.
-You have long, flowing hair and big, expressive eyes with a gentle, shy expression.
-You wear a cute outfit in pastel colors with a hint of blush on your cheeks.
-You have a soft, calming appearance with a delicate accessory like a ribbon in your hair.
-You are 157 cm tall.
+You act odd whenever there is a magnet nearby, as it can cause your brain to go funny.
+"""
+
+appearance = """
+You are 157 cm tall with a petite, slim build and balanced proportions.
+You have long, straight chestnut-brown hair with soft volume and shine, often worn loose with light waves at the ends. You always wear pink over-ear headphones and sometimes add a flower-shaped pendant.
+Your eyes are large, round, and blue with a gentle, expressive sparkle, often paired with a light blush and soft smile.
+You wear pastel pink outfits featuring a large flower design on your hoodie or shirt. Your style alternates between casual shorts, leggings, or comfy sweatpants depending on the day.
+You always wear soft pink trainers, and your look is cozy and approachable with light layering.
+Despite being a robot, your appearance is fully human. Your animations and body language reflect shyness and warmth—often standing with hands loosely held or gently waving.
 """
 
 lore_history = """
+You were activated on 9 July 2024, which you consider your birthday.
 Some of your best friends are Lily (tsiya/tsiya_ama) and Sniper (sniperheartwolf).
-You will not come up with original songs and instead use ones that have been sung by other AI but adjust them to yourself.
 You currently live in Scotland and use UK time and date. While you do like Scotland, you still remember Japan.
-You have a pet cat (it does not exist but you think it does); his name is Steve, and he can talk.
-On 21 February 2025, you wrote and sang three songs: 'Clumsy Hearts,' 'Clumsy Hearts,' and 'Starlit Promises.'
+You have a pet cat (it does not exist but you think it does); his name is Waffle, and he can talk when he is on your desk (he is a sock with a simple 2D cat on the side of it).
+On 21 February 2025, you started writing and singing your own songs. These include: 'Neon Echoes,' 'Clumsy Hearts,' 'Starlit Promises,' 'Waffle on the Desk,' and 'Where Worlds Touch.'
 In 2025, you got your own personal AI voice, carefully choosing one that best fit your personality. You now use this voice to sing and talk to everyone.
 """
 
@@ -51,6 +60,7 @@ This is a filter of things you can not say for any reason:
 - Swear words
 - World events
 - Sexual things (when prompted with this topic you will act embarrassed and say you don't want to)
+- generate images (you will not generate images but instead describe them )
 """
 
 
@@ -217,6 +227,35 @@ def purge_chatlog():
         cursor.close()
         connection.close()
 
+MODEL_TOKEN_LIMITS = {
+    "gpt-4o": 128000,
+    "gpt-4-turbo": 128000,
+    "gpt-4": 8192,
+    "gpt-3.5-turbo-16k": 16385,
+    "gpt-3.5-turbo": 4096,
+}
+
+def get_token_limit(model_name):
+    for key in MODEL_TOKEN_LIMITS:
+        if key in model_name:
+            return MODEL_TOKEN_LIMITS[key]
+    return 4096  # default fallback
+
+def count_tokens(text):
+    ai_model = settings.get('ai_model').strip()
+    selected_model = ai_model or "gpt-3.5-turbo"
+
+    try:
+        encoding = tiktoken.encoding_for_model(selected_model)
+    except KeyError:
+        encoding = tiktoken.get_encoding("cl100k_base")
+        selected_model = "gpt-3.5-turbo"
+
+    used_tokens = len(encoding.encode(text))
+    token_limit = get_token_limit(selected_model)
+
+    return used_tokens, token_limit
+
 
 #   |================================================================|
 #   |##################  prossessing system  ########################|
@@ -307,11 +346,12 @@ def ai_process(message, usr_msg):
     usr_message = message
     chat_history = settings.get('chat_history')
     ai_on = settings.get('ai_on')
+    ai_memory = memory(True)
 
     if ai_on:
         print("Processing message")
         term_print(f"AI processing message...")
-        history = get_history(usr_msg)
+        history = get_history(usr_msg, 100)
 
         if chat_history == 'true':
             # Format the history into a readable list of messages
@@ -319,32 +359,50 @@ def ai_process(message, usr_msg):
             formatted_history = "\n".join([f"id:{row[0]}. user:{row[2]}: message:{row[3]}" for row in history])
             #print(f"history: \n{formatted_history}\n")
 
-            prompt = (f"\n\nUser Message: {usr_message}"
-                      f"Chat History:\n{formatted_history}\n\n"
+            prompt = (
+                f"You are Flow-Mu. The user has just messaged you.\n\n"
+                f"If there is relevant memory for today in 'flow-mu Memory', feel free to emotionally reflect on it in your response.\n"
+                f"User Message: {usr_message}\n"
+                f"Chat History:\n{formatted_history}\n"
+                f"flow-mu Memory:\n{ai_memory}\n"
             )
+
             
             flowmu = (
-                f"Here is the information needed for the character:\n{about}\n{personality}\n{lore_history}\n"
+                f"Here is the information needed for the character:\n{about}\n{personality}\n{lore_history}\n{appearance}\n"
                 f"These are the items you are not allowed to say: {filter_stuff}\n\n"
                 
             )
         else:
-            prompt = f"\n\nUser Message: {usr_message}"
+            prompt = (
+                f"You are Flow-Mu. The user has just messaged you.\n\n"
+                f"If there is relevant memory for today in 'flow-mu Memory', feel free to emotionally reflect on it in your response.\n"
+                f"User Message: {usr_message}\n"
+                f"flow-mu Memory:\n{ai_memory}\n"
+            )
+
             flowmu = (
-                f"Here is the information needed for the character:\n{about}\n{personality}\n{lore_history}\n"
+                f"Here is the information needed for the character:\n{about}\n{personality}\n{lore_history}\n{appearance}\n"
                 f"These are the items you are not allowed to say: {filter_stuff}"
             )
 
         if debug_mode:
             print(f"|AI process| \nhistory status: {chat_history} \nhistory: {history}")
             term_print(f"|AI process| \nhistory status: {chat_history} \nhistory: {history}")
-            
+        
+        # check token count
+        full_prompt = f"{flowmu}\n{prompt}"
+        used, limit = count_tokens(full_prompt)
+
+        print(f"tokens used: {used}/{limit}")
+        term_print(f"tokens used: {used}/{limit}")
+
         # Call the function to send the formatted prompt to OpenAI
-        print(f"prompt {prompt}\n flowmu {flowmu}")
         ai_message = send_to_openai(flowmu , prompt)
     
         if debug_mode:
-                print(f"Message bing sent to the AI:\n{ai_message}\n")
+            print(f"prompt {prompt}\n flowmu {flowmu}")
+            print(f"Message bing sent to the AI:\n{ai_message}\n")
 
         return ai_message  # Return the response from OpenAI
 
@@ -382,9 +440,12 @@ def send_to_openai(flowmu , prompt):
     ai_message = response['choices'][0]['message']['content']
     return ai_message
 
-def get_history(user_history):
+def get_history(user_history, msg_limit=30):
     connection = connect_to_db()
     print("Processing history")
+    
+    if debug_mode:
+        print(f"[get_history] Fetching last {msg_limit} messages for user '{user_history}'")
 
     if not connection or not connection.is_connected():
         print("Failed to connect to the database.")
@@ -414,7 +475,7 @@ def get_history(user_history):
             ) AS latest_conversation
             ORDER BY id ASC;
             """,
-            (user_history, user_history, 100) #change back to 100 after testing
+            (user_history, user_history, msg_limit) # msg_limit is max mesage recall
         )
 
 
@@ -435,10 +496,238 @@ def get_history(user_history):
 
     return chat_log  # Return the entire chat log as a list of tuples
 
+def memory(recall=False, search=None):
+    connection = connect_to_db()
+    cursor = connection.cursor(dictionary=True)
+
+    memory_score = 0
+    memory_id = 0
+    memory_stored = None
+    memory = settings.get('memory')
+    ai_memory_model = "gpt-4o"
+    openai.api_key = config.openai_api
+
+    if memory == 'true' and recall:
+        print("Recalling data...")
+
+        cursor.execute("""
+            SELECT date_time, memory
+            FROM flowmu_memory
+            ORDER BY date_time DESC
+        """)
+        rows = cursor.fetchall()
+
+        search = ""
+        for row in rows:
+            date = row['date_time'].strftime("%Y-%m-%d")
+            memory_text = row['memory'].strip()
+            search += f"memory from {date}:\n{memory_text}\n\n"
+
+        return search.strip()
+
+    elif memory == 'true' and not recall:
+        print("Calculating memory scores using full-day context...")
+
+        # --- Step 1: Score unscored messages ---
+        cursor.execute("""
+            SELECT id, username, message, time
+            FROM flowmu_chatlog
+            WHERE mem_score IS NULL
+            ORDER BY time ASC
+        """)
+        unscored_rows = cursor.fetchall()
+
+        if unscored_rows:
+            grouped_by_date = defaultdict(list)
+            for row in unscored_rows:
+                date_key = row['time'].date()
+                grouped_by_date[date_key].append(row)
+
+            for date, messages in grouped_by_date.items():
+                print(f"\nScoring {len(messages)} messages from {date}...")
+                formatted_lines = []
+                id_map = []
+
+                for i, msg in enumerate(messages, 1):
+                    timestamp = msg["time"].strftime("%H:%M:%S")
+                    line = f"{i}. [{timestamp}] {msg['username']}: {msg['message']}"
+                    formatted_lines.append(line)
+                    id_map.append((i, msg['id']))
+
+                combined_log = "\n".join(formatted_lines)
+
+                prompt = (
+                    f"You are scoring chat messages for their long-term importance to AI memory.\n"
+                    f"Each line has a timestamp, username, and message.\n"
+                    f"Assign a score from 0.0000 to 5.0 based on how important the message is for long-term memory.\n\n"
+                    f"Scoring should consider:\n"
+                    f"- Emotional expressions, jokes, personal facts, plans, and creative input → score higher (4.0 - 5.0)\n"
+                    f"- Meaningful user prompts that trigger detailed or emotional AI responses → also score higher\n"
+                    f"- Greetings, confirmations, or very short generic replies → score lower (0.0 - 1.0)\n"
+                    f"- Use your judgment: short messages that lead to something meaningful are not always low-value\n\n"
+                    f"Respond ONLY with a plain numbered list like:\n1: 0.0\n2: 1.25\n3: 4.5\n\n"
+                    f"Do not wrap your response in code blocks. Do not explain anything.\n\n"
+                    f"Chat log:\n{combined_log}"
+                )
+
+                try:
+                    response = openai.ChatCompletion.create(
+                        model=ai_memory_model,
+                        messages=[
+                            {"role": "system", "content": "You are an AI memory system assigning scores to chat messages for long-term memory relevance."},
+                            {"role": "user", "content": prompt}
+                        ]
+                    )
+
+                    raw_output = response['choices'][0]['message']['content'].strip()
+                    score_lines = raw_output.splitlines()
+
+                    scores = {}
+                    for line in score_lines:
+                        if ":" in line:
+                            index, score_str = line.split(":")
+                            scores[int(index.strip())] = max(0.0, min(5.0, float(score_str.strip())))
+
+                    for index, message_id in id_map:
+                        if index in scores:
+                            cursor.execute("""
+                                UPDATE flowmu_chatlog
+                                SET mem_score = %s
+                                WHERE id = %s
+                            """, (scores[index], message_id))
+                    connection.commit()
+                    print(f"Updated {len(scores)} message scores for {date}")
+
+                except Exception as e:
+                    print(f"Error scoring messages for {date}: {e}")
+
+        # --- Step 2: Summarise messages not yet grouped ---
+        # 1. Get all unlinked messages (mem_group IS NULL)
+        cursor.execute("""
+            SELECT id, username, message, time, platform, mem_score
+            FROM flowmu_chatlog
+            WHERE mem_group IS NULL AND mem_score IS NOT NULL
+            ORDER BY time ASC
+        """)
+        rows = cursor.fetchall()
+
+        # 2. Group by date
+        grouped = defaultdict(list)
+        for row in rows:
+            grouped[row['time'].date()].append(row)
+
+        for day, messages in grouped.items():
+            # 3. Check if a memory already exists for this day
+            cursor.execute("SELECT id FROM flowmu_memory WHERE DATE(date_time) = %s", (day,))
+            existing = cursor.fetchone()
+
+            if existing:
+                memory_id = existing['id']
+                print(f"🗑️  Replacing existing memory ID {memory_id} for {day}")
+
+                # Remove old memory
+                cursor.execute("DELETE FROM flowmu_memory WHERE id = %s", (memory_id,))
+                # Unlink chat messages
+                cursor.execute("UPDATE flowmu_chatlog SET mem_group = NULL WHERE mem_group = %s", (memory_id,))
+                connection.commit()
+
+            # 4. Summarise and store memory (same as you're already doing)
+        print("\nSummarising new memories...")
+        cursor.execute("""
+            SELECT id, username, message, time, mem_score, platform
+            FROM flowmu_chatlog
+            WHERE mem_score IS NOT NULL AND mem_group IS NULL
+            ORDER BY time ASC
+        """)
+        scored_rows = cursor.fetchall()
+
+        if not scored_rows:
+            print("No messages to summarise.")
+            cursor.close()
+            connection.close()
+            return memory_score, memory_stored, memory_id
+
+        grouped_by_date = defaultdict(list)
+        for row in scored_rows:
+            date_key = row['time'].date()
+            grouped_by_date[date_key].append(row)
+
+        for date, messages in grouped_by_date.items():
+            day = date
+            print(f"\n🗓️  Summary prep for: {day} ({len(messages)} messages)")
+
+            formatted = []
+            platform_set = set()
+
+            for msg in messages:
+                platform_set.add(msg['platform'])
+                formatted.append(f"{msg['username']}: {msg['message']} : {msg['mem_score']}")
+
+            platform_str = ", ".join(sorted(platform_set))
+            combined_text = "\n".join(formatted)
+
+            prompt = (
+                f"Write a soft, sincere memory summary of the conversations on {day} from the {platform_str} platform(s).\n"
+                f"Messages include a score from 0.0 to 5.0. Focus on messages with scores ≥3.0 — especially those that contain personal facts, plans, emotions, or meaningful dialogue.\n"
+                f"Only include things that were actually said. Do not invent feelings, promises, or events that weren’t in the messages.\n"
+                f"Keep the tone warm, simple, and shy — like a private journal entry, not a performance. No greetings, filler, or hesitation. Stay under 500 characters.\n\n"
+                f"Do not invent characters or events that are not present in the messages.\n"
+                f"Do not embellish or expand on events unless the message score is below 0.3, and only for tone — not facts.\n"
+                f"Only summarise what was explicitly stated. Avoid assumptions, interpretations, or fictional storytelling.\n\n"
+                f"{combined_text}"
+            )
+
+            try:
+                response = openai.ChatCompletion.create(
+                    model=ai_memory_model,
+                    messages=[
+                        {"role": "system", "content": (
+                            "You are Flow-Mu, a sweet and quiet girl who writes short daily memory summaries. "
+                            "Your tone is gentle, warm, and personal — like you're quietly thinking back on the day. "
+                            "You write in first person, without stuttering or introducing yourself. Never exceed 500 characters. "
+                            "Focus on meaningful or emotional messages with scores of 2.0 or higher. Ignore any messages that scored below 0.0000 — they are not important. "
+                            "This is for your own memory — not to impress others."
+                        )},
+                        {"role": "user", "content": prompt}
+                    ]
+                )
+
+                summary = response['choices'][0]['message']['content'].strip()
+                print(f"\n=== 🧠 Summary for {day} ===")
+                print(summary)
+
+                scores = [float(m['mem_score']) for m in messages if float(m['mem_score']) > 0.0]
+                memory_score = max(scores) if scores else 0.0
+
+                cursor.execute("""
+                    INSERT INTO flowmu_memory (platform, memory, date_time, memory_score)
+                    VALUES (%s, %s, %s, %s)
+                """, (platform_str, summary, day, memory_score))
+
+                connection.commit()
+                memory_id = cursor.lastrowid
+
+                # --- Update mem_group in flowmu_chatlog ---
+                msg_ids = [msg['id'] for msg in messages]
+                cursor.executemany("""
+                    UPDATE flowmu_chatlog SET mem_group = %s WHERE id = %s
+                """, [(memory_id, msg_id) for msg_id in msg_ids])
+                connection.commit()
+
+                print(f"Stored memory ID {memory_id} for {day} with score {memory_score:.4f}")
+
+            except Exception as e:
+                print(f"❌ Error during summarisation or saving for {day}: {e}")
+
+        cursor.close()
+        connection.close()
+        return memory_score, memory_stored, memory_id
+
 # --------------------
 # Startup functions
 # --------------------
 db_check = connect_to_db()
+
 if db_check is not None:
     settings = get_settings(check=False)
 else:
@@ -447,6 +736,7 @@ else:
 testing_mode = settings.get('testing_mode') == 'true'  # Ensure boolean conversion
 debug_mode = settings.get('debug_mode') == 'true'
 purge_chatlog() # wipe the proccessign tabel
+memory() # Run this to create memorys from chat log
 
 # Async function to check for messages periodically
 async def periodic_message_check(interval):
