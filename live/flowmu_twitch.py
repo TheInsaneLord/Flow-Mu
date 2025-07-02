@@ -10,7 +10,7 @@ import asyncio
 # global varebals
 bot_accept_names = ["flow-mu", "@flow-mu", "@flowmubot", "@FlowMuBot","@Flow-Mu Bot#7224", "@Flow-Mu Bot", "flowmu", "flowmubot"] # Names AI will respond to
 ignore_users = ["streamelements", "flowmubot", "soundalerts", "nightbot"]
-bot_ver = '3.4'
+bot_ver = '3.5'
 
 #   |================================================================|
 #   |##################   Configuration Below  ######################|
@@ -169,6 +169,11 @@ async def send_message(term_msg, message, user_message):
     cursor = connection.cursor()
     use_tos = settings.get('use_tos')
 
+    # Check if user is already in the tos_users table
+    cursor.execute('SELECT * FROM tos_users WHERE user_id = %s AND platform = %s AND status = 1'
+                    , (message.author.id, 'twitch'))
+    tos_user = cursor.fetchone()
+
     if random_reply == 'true':
         chance = random.randint(0, 100)
         print(f"random_reply_chance: {random_reply_chance} chance gen {chance}")
@@ -177,26 +182,31 @@ async def send_message(term_msg, message, user_message):
 
     if debug_mode:
         print(f"change to msg: {chance}")
-        print(f"random_reply_chance: {random_reply_chance}")
+        print(f"Random Reply Chance: {random_reply_chance}, Chance: {chance}")
+        print(f"ToS status: {use_tos}")
+        print(f"AI status: {ai_on}")
+        print(f"Message: {user_message}, Bot Accept Names: {bot_accept_names}")
 
     # Send to message database
-    if ai_on and (any(name in user_message.lower() for name in bot_accept_names) or chance <= int(random_reply_chance)):
-        # Check if user is already in the tos_users table
-        cursor.execute('SELECT * FROM tos_users WHERE user_id = %s AND platform = %s'
-                        , (message.author.id, 'twitch'))
-        tos_user = cursor.fetchone()
+
+    # no randome reply for non ToS users
+    if use_tos == 'true' and not tos_user and chance <= int(random_reply_chance):
+            print("User triggered random reply while ToS is active — message dropped.")
+            term_print("User triggered random reply while ToS is active — message dropped.")
+            cursor.close()
+            connection.close()
+            return
+
+    # Default message handeling
+    elif ai_on and (any(name in user_message.lower() for name in bot_accept_names) or chance <= int(random_reply_chance)):
         response_to_id = 0
         print(tos_user)
         
-        if tos_user or not use_tos:
-            print("Sending message to AI Core.")
-            
-            print(f"AI ON: {ai_on}")
-            print(f"Random Reply Chance: {random_reply_chance}, Chance: {chance}")
-            print(f"Message: {user_message}, Bot Accept Names: {bot_accept_names}")
+        if tos_user or use_tos != 'true':
+            print("Sending message to AI Core.") 
 
             if connection and connection.is_connected():
-                                # Send to AI                            
+                # Send to AI                            
                 try:
                     cursor.execute(
                         "INSERT INTO flowmu_messages (msg_from, msg_to, message) VALUES (%s, %s, %s)",
@@ -238,7 +248,7 @@ async def send_message(term_msg, message, user_message):
                 
                 # After sending the message, check for AI response
                 await response(message, response_to_id) # need to create dummy value
-        
+
         else:
             print("User did not agree to ToS")
             await message.channel.send("I can't speak to peole who haven't agree to my ToS use ?tos link or ?tos agree.")
@@ -387,6 +397,8 @@ class Bot(commands.Bot):
         print(f'User id is | {self.user_id}')
         print(f"listening on: {self.current_channels}")  # Ensure this reflects the current channels
         print(f"Testing mod: {testing_mode}")
+        print(f"Debug mode: {debug_mode}")
+        print(f"Bot vertion: {bot_ver}")
         print("The Bot is up and running.\n")
 
         # Save bot information globally
@@ -572,26 +584,108 @@ class Bot(commands.Bot):
                 cursor.execute('SELECT * FROM tos_users WHERE user_id = %s AND platform = %s', (user_id, platform))
                 result = cursor.fetchone()
 
+                from datetime import datetime
+                re_agree_note = f"Re-agreed on {datetime.utcnow().isoformat()} UTC"
+
                 if not result:
-                        # Insert new user agreement into tos_users table
+                    # 🟢 New agreement
                     cursor.execute(
-                        'INSERT INTO tos_users (user_id, platform, username, agreed_at, agreed_version, status) VALUES (%s, %s, %s, NOW(), %s, %s)',
-                        (user_id, platform, username, '1.0', True)
+                        'INSERT INTO tos_users (user_id, platform, username, agreed_at, agreed_version, status, notes) VALUES (%s, %s, %s, NOW(), %s, %s, %s)',
+                        (user_id, platform, username, '1.0', True, "Initial agreement")
                     )
                     connection.commit()
                     await ctx.send(f"Thank you {username} for agreeing to my ToS.")
+
+                elif result['status'] == 0:
+                    # 🔄 Re-agreeing after opt-out
+                    existing_notes = result['notes'] or ""
+                    updated_notes = (existing_notes + "\n" + re_agree_note).strip()
+
+                    cursor.execute(
+                        '''
+                        UPDATE tos_users
+                        SET status = 1, agreed_at = NOW(), agreed_version = %s, notes = %s
+                        WHERE user_id = %s AND platform = %s
+                        ''',
+                        ('1.0', updated_notes, user_id, platform)
+                    )
+                    connection.commit()
+                    await ctx.send(f"Welcome back {username}! Your agreement to the ToS has been re-activated.")
+
                 else:
-                    await ctx.send(f"{username}, you have already agreed to my ToS you don't need to do it agin.")
+                    # ✅ Already agreed
+                    await ctx.send(f"{username}, you have already agreed to my ToS — no need to do it again.")
 
             except Error as e:
                 print(f"Error sending message to database: {e}")
-                await ctx.send("Oh no, I am having some issues don't worry @the_insane_lord will fix it.")
+                await ctx.send("Oh no, I'm having some issues — don't worry, @the_insane_lord will fix it.")
             finally:
                 cursor.close()
                 connection.close()
-        
+
+
+        elif status == 'disagree':
+            try:
+                # Fetch existing notes
+                cursor.execute('SELECT notes FROM tos_users WHERE user_id = %s AND platform = %s', (user_id, platform))
+                result = cursor.fetchone()
+                existing_notes = result['notes'] if result and result['notes'] else ""
+
+                # Build new opt-out note with timestamp
+                from datetime import datetime
+                optout_note = f"Opted out on {datetime.utcnow().isoformat()} UTC"
+                updated_notes = (existing_notes + "\n" + optout_note).strip()
+
+                # Soft delete: set status = 0 and update notes
+                cursor.execute('''
+                    UPDATE tos_users
+                    SET status = 0, notes = %s
+                    WHERE user_id = %s AND platform = %s AND status = 1
+                ''', (updated_notes, user_id, platform))
+
+                connection.commit()
+
+                await ctx.send("You’ve opted out of Flow-Mu’s ToS. Please contact contact@insane-servers.co.uk to request data removal under GDPR.")
+
+            except Error as e:
+                print(f"Error processing opt-out: {e}")
+                await ctx.send("Something went wrong while processing your opt-out. Please contact @the_insane_lord.")
+            finally:
+                cursor.close()
+                connection.close()
+       
         else:
             await ctx.send("You can find the ToS here: https://insane-servers.co.uk/flow-mu_tos. if you agree just do ?tos agree")
+
+#   Change Reply chans
+
+    @commands.command()
+    async def rc(self, ctx, chance="-1"):
+        connection = connect_to_db()
+        cursor = connection.cursor(dictionary=True)
+        
+        if chance != -1 or chance != "-1":
+            chance = chance.strip("%")
+            chance = int(chance)
+            
+            print(f"Changeing Reply chance to: {chance}")
+            
+           # check the perms
+            if (ctx.author.is_mod or ctx.author.name.lower() == ctx.channel.name.lower()):
+                # chaneg chance
+                print("User is authorised.")
+                cursor.execute(
+                    "UPDATE flowmu_settings SET value = %s WHERE setting = %s",
+                    (chance, 'random_reply_chance')
+                )
+                connection.commit()
+                await ctx.send(f"Reply chance updated to {chance}%.")
+
+            else:
+                await ctx.send(f"Sorry {ctx.author.name}, this command is for the streamer or mods only.")
+
+        else:
+            await ctx.send("Please provide a number between 0 and 100 (e.g. ?rc 25)")
 
 # run section
 if db_check is not None:
