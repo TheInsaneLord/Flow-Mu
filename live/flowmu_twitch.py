@@ -10,7 +10,7 @@ import asyncio
 # global varebals
 bot_accept_names = ["flow-mu", "@flow-mu", "@flowmubot", "@FlowMuBot","@Flow-Mu Bot#7224", "@Flow-Mu Bot", "flowmu", "flowmubot"] # Names AI will respond to
 ignore_users = ["streamelements", "flowmubot", "soundalerts", "nightbot"]
-bot_ver = '3.5'
+bot_ver = '3.6'
 
 #   |================================================================|
 #   |##################   Configuration Below  ######################|
@@ -175,14 +175,14 @@ async def send_message(term_msg, message, user_message):
     tos_user = cursor.fetchone()
 
     if random_reply == 'true':
-        chance = random.randint(0, 100)
-        print(f"random_reply_chance: {random_reply_chance} chance gen {chance}")
+        roll_chance = random.randint(0, 100)
+        print(f"random_reply_chance: {random_reply_chance} chance gen {roll_chance}")
     else:
-        chance = 101
+        roll_chance = 101
 
     if debug_mode:
-        print(f"change to msg: {chance}")
-        print(f"Random Reply Chance: {random_reply_chance}, Chance: {chance}")
+        print(f"change to msg: {roll_chance}")
+        print(f"Random Reply Chance: {random_reply_chance}, Chance: {roll_chance}")
         print(f"ToS status: {use_tos}")
         print(f"AI status: {ai_on}")
         print(f"Message: {user_message}, Bot Accept Names: {bot_accept_names}")
@@ -190,7 +190,7 @@ async def send_message(term_msg, message, user_message):
     # Send to message database
 
     # no randome reply for non ToS users
-    if use_tos == 'true' and not tos_user and chance <= int(random_reply_chance):
+    if use_tos == 'true' and not tos_user and roll_chance <= int(random_reply_chance):
             print("User triggered random reply while ToS is active — message dropped.")
             term_print("User triggered random reply while ToS is active — message dropped.")
             cursor.close()
@@ -198,12 +198,12 @@ async def send_message(term_msg, message, user_message):
             return
 
     # Default message handeling
-    elif ai_on and (any(name in user_message.lower() for name in bot_accept_names) or chance <= int(random_reply_chance)):
+    elif ai_on and (any(name in user_message.lower() for name in bot_accept_names) or roll_chance <= int(random_reply_chance)):
         response_to_id = 0
         print(tos_user)
         
         if tos_user or use_tos != 'true':
-            print("Sending message to AI Core.") 
+            print("Sending message to Afavoured_channelI Core.") 
 
             if connection and connection.is_connected():
                 # Send to AI                            
@@ -247,7 +247,7 @@ async def send_message(term_msg, message, user_message):
                             print(f"Error sending message to database: {e}")             
                 
                 # After sending the message, check for AI response
-                await response(message, response_to_id) # need to create dummy value
+                await response(message, response_to_id) 
 
         else:
             print("User did not agree to ToS")
@@ -261,8 +261,10 @@ async def send_message(term_msg, message, user_message):
     term_print(term_msg)
     
 async def response(message, response_to_id):
-    global bot_info
-    await asyncio.sleep(4)  # Simulate processing time
+    ai_response = False
+    ai_response_loops = 0
+    global bot_info, bot
+
     chat_history = settings.get('chat_history')
     print("Checking for response from AI Core")
     term_print("Checking for response from AI Core")
@@ -272,80 +274,111 @@ async def response(message, response_to_id):
 
     if not connection or not connection.is_connected():
         print("Failed to connect to the database.")
-        return  # Exit if the database connection fails
+        return
+
+    # Determine the target channel
+    if message:
+        target_channel = message.channel
+    else:
+        if bot.connected_channels:
+            target_channel = bot.connected_channels[0]
+        else:
+            # Silent fail if checking periodic but not connected
+            return
 
     try:
-        cursor = connection.cursor(dictionary=True)
+        # Loop up to 3 times
+        while ai_response_loops < 3:
+            # 1. Wait 5 seconds to give AI a chance to respond
+            await asyncio.sleep(5)
+            
+            ai_response_loops += 1
+            cursor = None 
+            
+            try:
+                cursor = connection.cursor(dictionary=True)
 
-        # Query to find the first message where msg_to is 'flowmu_twitch' and msg_from is 'ai_core'
-        cursor.execute(
-            "SELECT msg_id, message FROM flowmu_messages WHERE msg_to = %s AND msg_from = %s AND responded = %s ORDER BY msg_id ASC LIMIT 1",
-            ('flowmu_twitch', 'ai_core', False)
-        )
+                # Query to find the first message
+                cursor.execute(
+                    "SELECT msg_id, message FROM flowmu_messages WHERE msg_to = %s AND msg_from = %s AND responded = %s ORDER BY msg_id ASC LIMIT 1",
+                    ('flowmu_twitch', 'ai_core', False)
+                )
 
-        # Fetch the first matching message
-        response_record = cursor.fetchone()
+                response_record = cursor.fetchone()
 
-        if response_record:
-            ai_message = response_record['message']
-            print(f"Response from AI Core: {ai_message}")
+                if response_record:
+                    ai_message = response_record['message']
+                    ai_response = True 
 
-            # Send the AI's response back to the Twitch chat
-            await message.channel.send(ai_message)
+                    # Send the response
+                    await target_channel.send(ai_message)
+                    
+                    # Log success
+                    print(f"Response from AI Core (Loop {ai_response_loops}): {ai_message[:30]}...")
+                    term_print("Response from AI Core received and sent.")
 
-            # Add response to chat history
-            if chat_history == 'true':
-                chatbot_id, chatbot_nick = bot_info  # Get bot info
-
-                if connection and connection.is_connected():
+                    # Add response to chat history
+                    if chat_history == 'true':
+                        chatbot_id, chatbot_nick = bot_info
+                        if connection.is_connected():
+                            try:
+                                cursor.execute(
+                                    'INSERT INTO flowmu_chatlog (userid, username, message, is_response, platform, response_to) VALUES (%s, %s, %s, %s, %s, %s)',
+                                    (chatbot_id, chatbot_nick, ai_message, True, 'twitch', response_to_id)
+                                )
+                                connection.commit()
+                            except Error as e:
+                                print(f"Error sending message to database: {e}")
+                    
+                    # Clean up the database
                     try:
                         cursor.execute(
-                            'INSERT INTO flowmu_chatlog (userid, username, message, is_response, platform, response_to) VALUES (%s, %s, %s, %s, %s, %s)',
-                            (chatbot_id, chatbot_nick, ai_message, True, 'twitch', response_to_id)
+                            "DELETE FROM flowmu_messages WHERE msg_id = %s",
+                            (response_record['msg_id'],)
                         )
                         connection.commit()
 
+                        cursor.execute(
+                            "DELETE FROM flowmu_messages WHERE msg_from = %s AND msg_to = %s AND responded = %s",
+                            ('flowmu_twitch', 'ai_core', True)
+                        )
+                        connection.commit()
                     except Error as e:
-                        print(f"Error sending message to database: {e}")
-            
-            # clean the dtatbase of read messages
-            try:
-                # Delete the AI response after sending
-                cursor.execute(
-                    "DELETE FROM flowmu_messages WHERE msg_id = %s",
-                    (response_record['msg_id'],)
-                )
-                connection.commit()
+                        print(f"Error cleaning up messages: {e}")
 
-                # Delete the original message from flowmu_twitch
-                cursor.execute(
-                    "DELETE FROM flowmu_messages WHERE msg_from = %s AND msg_to = %s AND responded = %s",
-                    ('flowmu_twitch', 'ai_core', True)
-                )
-                connection.commit()
+                    # Break the loop immediately since we found a response
+                    break
 
-                print(f"Deleted original and response messages for msg_id {response_record['msg_id']}")
             except Error as e:
-                print(f"Error cleaning up messages: {e}")
+                print(f"Error retrieving response from database: {e}")
+            
+            finally:
+                # Ensure cursor is closed for this loop iteration
+                if cursor:
+                    cursor.close()
+            
+            # If no response was found in this iteration, the loop continues.
+            # The await asyncio.sleep(5) at the top will trigger again for the next attempt.
 
-        else:
-            print("No response found from AI Core.")
-            term_print("No response found from AI Core")
+        # If the loop finishes and we never got a response
+        if not ai_response:
+            print(f"No response from AI Core after 3 attempts (15 seconds total).")
+            term_print("No response from AI Core after 15 seconds.")
 
-    except Error as e:
-        print(f"Error retrieving response from database: {e}")
-        term_print("Error retrieving response from database")
+    except Exception as e:
+        print(f"Critical error in response function: {e}")
 
     finally:
-        # Ensure the cursor and connection are closed properly
-        cursor.close()
-        connection.close()
-
+        # Ensure the main connection is closed once we are completely done
+        if connection.is_connected():
+            connection.close()
+                                   
 async def periodic_check(interval):
     while True:
         old_settings = settings.copy()
         check_settings()  # This will call your existing check_settings function
         send_status() # send status update
+        await response(None, 0)
 
         # Check if channels have changed
         if old_settings.get('chat_channel') != settings.get('chat_channel'):
@@ -362,6 +395,102 @@ async def periodic_check(interval):
 
         await asyncio.sleep(interval)  # Wait for the specified interval (in seconds)
 
+
+#   User welcome - Welcome new users and say hello to returning ones
+async def user_welcome(user, user_id, message):
+    # Connect to the database
+    connection = connect_to_db()
+
+    if not connection or not connection.is_connected():
+        print("Failed to connect to the database.")
+        return
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+
+        # 1. Check if user exists and get current stats
+        cursor.execute(
+            'SELECT msg_today, msg_total, username FROM user_mapping WHERE platform_id = %s AND platform = %s',
+            (user_id, 'twitch')
+        )
+        user_db = cursor.fetchone()
+        print(user_db)
+
+        if user_db:
+            # --- EXISTING USER ---
+            
+            # Check if they have NOT messaged today (0 is False)
+            if user_db['msg_today'] == 0:
+                #await message.channel.send(f"Welcome back {user_db['username']}!")
+                await message.channel.send(f"Welcome back, {user_db['username']}! 🌸 It's always a delight to have you here again! Whether we're playing games or just sharing giggles over silly stories, your presence truly lights up our space. Pull up a comfy seat and let's create more fun memories together! 💖✨")
+
+            # Increment Total
+            new_total = user_db['msg_total'] + 1
+            
+            # 2. UPDATE: Set msg_today to 1 (True) and save new total
+            cursor.execute(
+                "UPDATE user_mapping SET msg_total = %s, msg_today = 1 WHERE platform_id = %s",
+                (new_total, user_id)
+            )
+
+        else:
+            # --- NEW USER ---
+            
+            # Send welcome
+            #await message.channel.send(f"Welcome to the stream, {user}!")
+            await message.channel.send(f"Hey there, {user}! 🌸 Welcome to the chat! Grab a cozy seat and let's make sweet, clumsy memories together! 💖")
+
+            # Try to convert user_id to int for ffid (Twitch IDs are numbers)
+            try:
+                ffid = int(user_id)
+            except ValueError:
+                ffid = 0 # Fallback just in case
+
+            # 3. INSERT: Add new user with msg_today = 1 (True) and msg_total = 1
+            cursor.execute(
+                "INSERT INTO user_mapping (ffid, platform, username, platform_id, user_auth, msg_today, msg_total) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                (ffid, 'twitch', user, user_id, 0, 1, 1)
+            )
+
+        # 4. Commit changes to save them
+        connection.commit()
+
+    except Exception as e:
+        print(f"Critical error in User function: {e}")
+
+    finally:
+        if connection.is_connected():
+            cursor.close()
+            connection.close()
+
+#   clear users welcome
+def clear_user_welcome():
+    # Connect to the database
+    connection = connect_to_db()
+
+    if not connection or not connection.is_connected():
+        print("Failed to connect to the database.")
+        return
+
+    try:
+        cursor = connection.cursor()
+
+        # Update ALL users to set msg_today to 0 (False)
+        # No WHERE clause means it updates every row
+        cursor.execute("UPDATE user_mapping SET msg_today = 0")
+
+        # Commit is mandatory to save the change
+        connection.commit()
+        print("Reset: All user 'msg_today' flags set to False.")
+
+    except Exception as e:
+        print(f"Critical error clearing user welcome status: {e}")
+
+    finally:
+        # Ensure the connection is closed
+        if connection.is_connected():
+            cursor.close()
+            connection.close()
 # Startup functions
 db_check = connect_to_db()
 if db_check is not None:
@@ -371,6 +500,7 @@ else:
 
 testing_mode= settings.get('testing_mode') == 'true'  # Ensure boolean conversion
 debug_mode = settings.get('debug_mode') == 'true'
+clear_user_welcome()
 
 #   |================================================================|
 #   |##################   Bot code below  ###########################|
@@ -433,28 +563,44 @@ class Bot(commands.Bot):
             print(f"Updated channels: Now listening on: {self.current_channels}")
             term_print(f"Channel chaneged to: {self.current_channels}")
 
-            # stop chat log
+            # change settings enable/disable when chanel is changed
             try:
-                term_print("Turning off chat histor as channel has changed")
-                cursor.execute(
-                    "UPDATE flowmu_settings SET value = %s WHERE setting = %s",
-                    ('false', 'chat_history')
-                )
+                change_settings = ['chat_history', 'random_reply', 'use_tos']
+                favoured_channel ='the_insane_lord'
+                term_print(f"Turning off settings due to channel change: {', '.join(change_settings)}")
 
-                connection.commit()
+                if channel == favoured_channel:
+                    for setting in change_settings:
+                        cursor.execute(
+                            "UPDATE flowmu_settings SET value = %s WHERE setting = %s",
+                            ('true', setting)
+                        )
+                    connection.commit()
+
+                else:
+                    for setting in change_settings:
+                        cursor.execute(
+                            "UPDATE flowmu_settings SET value = %s WHERE setting = %s",
+                            ('false', setting)
+                        )
+                    connection.commit()
 
             except Error as e:
                 print(f"Error sending message to database: {e}")
             
     async def event_message(self, message):
         bot_running = settings.get('twitch_bot')
+        
         tsp = time_stamp()
         
         if bot_running == 'true':
             if message.echo or message.author.name in ignore_users:
                 return
-            
+
             if not message.content.startswith('?'):
+                if message.author.name != message.channel.name:
+                    await user_welcome(message.author.name, message.author.id, message)
+
                 user_message = str(message.content)
                 term_msg = f"{tsp} | {message.author.name}: {message.content}"
                 print(term_msg)
@@ -507,7 +653,7 @@ class Bot(commands.Bot):
 
     @commands.command()
     async def boop(self, ctx, user: str="x"):
-        chance = 65  # success chance
+        boop_chance = 65  # success chance
         roll = random.randint(0, 100)
         global bot_accept_names
 
@@ -524,7 +670,7 @@ class Bot(commands.Bot):
                 print("flow-mu boops self")
             await ctx.send(f"Oh no!! I have to boop my own nose.")
 
-            if roll < chance: # bad boop
+            if roll < boop_chance: # bad boop
                 await ctx.send("Flow-mu failed at booping her own nose and has ended up slaping her face instead.")
             else: # good boop
                 await ctx.send("Oh good, nothing bad happened.")
@@ -534,7 +680,7 @@ class Bot(commands.Bot):
             if debug_mode == True:
                     print("flow-mu boops other")
 
-            if roll < chance: # bad boop
+            if roll < boop_chance: # bad boop
                 await ctx.send(f"Flow-mu tries to boop {user} on the nose but fails the stealth check and then trips up and falls on her face.")
                 await ctx.send(f"Ouch!... You saw nothing {user}.")
 
@@ -543,15 +689,18 @@ class Bot(commands.Bot):
                 await ctx.send(f"Ha ha ha I booped you {user}.")
     
     @commands.command()
-    async def goto(self, ctx, channel="x"):
+    async def goto(self, ctx, goto_channel="x"):
         connection = connect_to_db()
         cursor = connection.cursor(dictionary=True)
         
-        if channel != 'X':
+        if goto_channel != 'X':
+            # turn off setting when changing channel
             try:
                 cursor.execute(
                     "UPDATE flowmu_settings SET value = %s WHERE setting = %s",
-                    (channel, 'chat_channel')
+                    (goto_channel, 'chat_channel',
+                    
+                    )
                 )
 
                 connection.commit()
@@ -562,11 +711,12 @@ class Bot(commands.Bot):
 
             cursor.close()
             connection.close()
-        
-            term_print(f"Going to {channel}")
-            await ctx.send(f"Ok I will head over to {channel}. Hope they are playing some thing fun.")
+
+            # let user know bot is moving to new channel
+            term_print(f"Going to {goto_channel}")
+            await ctx.send(f"Ok I will head over to {goto_channel}. Hope they are playing some thing fun.")
         else:
-            term_print(f"Failed to go to: {channel}")
+            term_print(f"Failed to go to: {goto_channel}")
             await ctx.send("Hmm... did you for get to say what channel I should go to")
 
     @commands.command()
