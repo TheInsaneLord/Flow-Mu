@@ -38,10 +38,10 @@ Currently, there are no restrictions on which Discord servers Flow-Mu can join. 
 ## Plans for the future
 ### What to expect for version 4 of Flow-mu
 Here is a list of features for the next version of Flow-mu
-- allow voice interaction
+- ~~allow voice interaction~~ (add Dec 2025)
 - Set up stuff to allow her to do her own streams
-- <s>create a custom voice for Flow-mu</s> (Added Feb 2025)
-- <s>animate the Flow-mu character model</s> (Added Apr 2025)
+- ~~create a custom voice for Flow-mu~~ (Added Feb 2025)
+- ~~animate the Flow-mu character model~~ (Added Apr 2025)
 
 ## License
 
