@@ -10,7 +10,7 @@ import config
 import asyncio
 from collections import defaultdict
 
-bot_ver = '3.5'
+bot_ver = '3.6'
 
 # AI settings and personality
 nono_list = ["fuck", "sex"]
@@ -271,6 +271,8 @@ def send_message(response, app):
     if connection and connection.is_connected():
             try:
                 # Properly form the SQL query to insert the message
+                if app == "STT_Voice_App":
+                    app = "flowmu_twitch"
                 cursor.execute(
                     "INSERT INTO flowmu_messages (msg_from, msg_to, message) VALUES (%s, %s, %s)",
                     ('ai_core', app, response)
@@ -335,8 +337,6 @@ def check_message():
         return None
 
     finally:
-        # Ensure the cursor and connection are closed properly
-        cursor.close()
         connection.close()
 
 def ai_process(message, usr_msg):
@@ -504,7 +504,7 @@ def memory(recall=False, search=None):
     memory_id = 0
     memory_stored = None
     memory = settings.get('memory')
-    ai_memory_model = "gpt-4o"
+    ai_memory_model = "gpt-4.1-mini"
     openai.api_key = config.openai_api
 
     if memory == 'true' and recall:
