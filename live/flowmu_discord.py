@@ -11,7 +11,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 bot = commands.Bot(command_prefix="?", case_insensitive=True, intents=intents)
-bot_ver = '3.5'
+bot_ver = '3.6'
 
 bot_accept_names = ["flow-mu", "@flow-mu", "@flowmubot", "@FlowMuBot","@Flow-Mu Bot#7224", "@Flow-Mu Bot", "flowmu", "flowmubot"] # Names AI will respond to
 ignore_users = [""]
@@ -266,8 +266,12 @@ async def send_message(term_msg, message, user_message):
 
     
 async def response(message, response_to_id):
+    ai_response = False
+    ai_response_loops = 0
     global bot_info
-    await asyncio.sleep(4)  # Simulate processing time
+    # Note: If you plan to call this with 'None' from periodic_check, 
+    # you will need to define a fallback channel here.
+    
     chat_history = settings.get('chat_history')
     print("Checking for response from AI Core")
     term_print("Checking for response from AI Core")
@@ -277,86 +281,132 @@ async def response(message, response_to_id):
 
     if not connection or not connection.is_connected():
         print("Failed to connect to the database.")
-        return  # Exit if the database connection fails
+        return
+
+    # Determine the target channel
+    if message:
+        target_channel = message.channel
+    else:
+        # DISCORD SPECIFIC:
+        # Discord bots are in multiple servers, so we can't just guess the channel like Twitch.
+        # If message is None (periodic check), we need a specific channel ID from settings.
+        # For now, we abort to prevent crashing.
+        print("Attempted periodic check without a target channel. Aborting.")
+        return
 
     try:
-        cursor = connection.cursor(dictionary=True)
+        # Loop up to 3 times
+        while ai_response_loops < 3:
+            # 1. Wait 5 seconds to give AI a chance to respond
+            await asyncio.sleep(5)
+            
+            ai_response_loops += 1
+            cursor = None 
+            
+            try:
+                cursor = connection.cursor(dictionary=True)
 
-        # Query to find the first message where msg_to is 'flowmu_discord' and msg_from is 'ai_core'
-        cursor.execute(
-            "SELECT msg_id, message FROM flowmu_messages WHERE msg_to = %s AND msg_from = %s AND responded = %s ORDER BY msg_id ASC LIMIT 1",
-            ('flowmu_discord', 'ai_core', False)
-        )
+                # Query to find the first message (DISCORD VERSION)
+                # Using 'flowmu_discord' instead of 'flowmu_twitch'
+                cursor.execute(
+                    "SELECT msg_id, message FROM flowmu_messages WHERE msg_to = %s AND msg_from = %s AND responded = %s ORDER BY msg_id ASC LIMIT 1",
+                    ('flowmu_discord', 'ai_core', False)
+                )
 
-        # Fetch the first matching message
-        response_record = cursor.fetchone()
+                response_record = cursor.fetchone()
 
-        if response_record:
-            ai_message = response_record['message']
-            print(f"Response from AI Core: {ai_message}")
+                if response_record:
+                    ai_message = response_record['message']
+                    ai_response = True 
 
-            # Send the AI's response back to the discord chat
-            await message.channel.send(ai_message)
+                    # Send the response
+                    await target_channel.send(ai_message)
+                    
+                    # Log success
+                    print(f"Response from AI Core (Loop {ai_response_loops}): {ai_message[:30]}...")
+                    term_print("Response from AI Core received and sent.")
 
-            # Add response to chat history
-            if chat_history == 'true':
-                chatbot_id, chatbot_nick = bot_info  # Get bot info
-
-                if connection and connection.is_connected():
+                    # Add response to chat history
+                    if chat_history == 'true':
+                        chatbot_id, chatbot_nick = bot_info
+                        if connection.is_connected():
+                            try:
+                                # Using 'discord' as platform
+                                cursor.execute(
+                                    'INSERT INTO flowmu_chatlog (userid, username, message, is_response, platform, response_to) VALUES (%s, %s, %s, %s, %s, %s)',
+                                    (chatbot_id, chatbot_nick, ai_message, True, 'discord', response_to_id)
+                                )
+                                connection.commit()
+                            except Error as e:
+                                print(f"Error sending message to database: {e}")
+                    
+                    # Clean up the database (DISCORD VERSION)
                     try:
+                        # Delete the AI response message
                         cursor.execute(
-                            'INSERT INTO flowmu_chatlog (userid, username, message, is_response, platform, response_to) VALUES (%s, %s, %s, %s, %s, %s)',
-                            (chatbot_id, chatbot_nick, ai_message, True, 'discord', response_to_id)
+                            "DELETE FROM flowmu_messages WHERE msg_id = %s",
+                            (response_record['msg_id'],)
                         )
                         connection.commit()
 
+                        # Delete the original message from flowmu_discord
+                        cursor.execute(
+                            "DELETE FROM flowmu_messages WHERE msg_from = %s AND msg_to = %s AND responded = %s",
+                            ('flowmu_discord', 'ai_core', True)
+                        )
+                        connection.commit()
+                        
+                        print(f"Deleted original and response messages for msg_id {response_record['msg_id']}")
                     except Error as e:
-                        print(f"Error sending message to database: {e}")
-            
-            # clean the dtatbase of read messages
-            try:
-                # Delete the AI response after sending
-                cursor.execute(
-                    "DELETE FROM flowmu_messages WHERE msg_id = %s",
-                    (response_record['msg_id'],)
-                )
-                connection.commit()
+                        print(f"Error cleaning up messages: {e}")
 
-                # Delete the original message from flowmu_discord
-                cursor.execute(
-                    "DELETE FROM flowmu_messages WHERE msg_from = %s AND msg_to = %s AND responded = %s",
-                    ('flowmu_discord', 'ai_core', True)
-                )
-                connection.commit()
+                    # Break the loop immediately since we found a response
+                    break
 
-                print(f"Deleted original and response messages for msg_id {response_record['msg_id']}")
             except Error as e:
-                print(f"Error cleaning up messages: {e}")
+                print(f"Error retrieving response from database: {e}")
+            
+            finally:
+                # Ensure cursor is closed for this loop iteration
+                if cursor:
+                    cursor.close()
+            
+            # If no response was found in this iteration, the loop continues.
+            # The await asyncio.sleep(5) at the top will trigger again for the next attempt.
 
-        else:
-            print("No response found from AI Core.")
-            term_print("No response found from AI Core")
+        # If the loop finishes and we never got a response
+        if not ai_response:
+            print(f"No response from AI Core after 3 attempts (15 seconds total).")
+            term_print("No response from AI Core after 15 seconds.")
 
-    except Error as e:
-        print(f"Error retrieving response from database: {e}")
-        term_print("Error retrieving response from database")
+    except Exception as e:
+        print(f"Critical error in response function: {e}")
 
     finally:
-        # Ensure the cursor and connection are closed properly
-        cursor.close()
-        connection.close()
+        # Ensure the main connection is closed once we are completely done
+        if connection.is_connected():
+            connection.close()
 
 async def periodic_check(interval):
     while True:
         old_settings = settings.copy()
         check_settings()  # This will call your existing check_settings function
         send_status() # send status update
+        response(None, 0)
 
-        # Add other periodic checks here if needed
+        # DISCORD NOTE:
+        # Unlike Twitch, we cannot blindly call "await response(None, 0)" because 
+        # Discord bots are in multiple channels and we won't know where to send the message.
+        # If you want to enable queue checking for Discord, you must fetch a specific 
+        # channel object here to pass to the response function.
+        
+        # Example (if you have a default channel ID in settings):
+        # if settings.get('discord_queue_channel_id'):
+        #     channel = bot.get_channel(int(settings.get('discord_queue_channel_id')))
+        #     # Create a dummy message object or adjust response() to accept 'channel' directly
+        #     await response(channel, 0) 
 
         await asyncio.sleep(interval)  # Wait for the specified interval (in seconds)
-
-
 
 #   |================================================================|
 #   |##################   Bot code below  ###########################|
@@ -547,7 +597,7 @@ async def tos(ctx, status='x'):
             re_agree_note = f"Re-agreed on {datetime.utcnow().isoformat()} UTC"
 
             if not result:
-                # 🟢 New agreement
+                # New agreement
                 cursor.execute(
                     'INSERT INTO tos_users (user_id, platform, username, agreed_at, agreed_version, status, notes) VALUES (%s, %s, %s, NOW(), %s, %s, %s)',
                     (user_id, platform, username, '1.0', True, "Initial agreement")
@@ -556,7 +606,7 @@ async def tos(ctx, status='x'):
                 await ctx.send(f"Thank you {username} for agreeing to my ToS.")
 
             elif result['status'] == 0:
-                # 🔄 Re-agreeing after opt-out
+                # Re-agreeing after opt-out
                 existing_notes = result['notes'] or ""
                 updated_notes = (existing_notes + "\n" + re_agree_note).strip()
 
@@ -572,7 +622,7 @@ async def tos(ctx, status='x'):
                 await ctx.send(f"Welcome back {username}! Your agreement to the ToS has been re-activated.")
 
             else:
-                # ✅ Already agreed
+                # Already agreed
                 await ctx.send(f"{username}, you have already agreed to my ToS — no need to do it again.")
 
         except Error as e:
