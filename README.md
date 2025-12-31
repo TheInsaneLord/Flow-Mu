@@ -8,9 +8,9 @@ This is the public side of the code for the Flow-Mu bot used on [The_Insane_Lord
 The latest place to find the code being used for Flow-Mu is in the folder: [**live**](https://github.com/TheInsaneLord/Flow-Mu/tree/main/live). You can add Flow-Mu to your Discord server with [this link](https://discord.com/oauth2/authorize?client_id=1258255735612117012&permissions=71680&integration_type=0&scope=bot), but do note **you can not turn on or off the AI for the Discord bot**.
 
 ## Current Active Bot Versions 
-**Discord Version**: 3.5
-**Twitch Version**: 3.5
-**AI Core vertion**: 3.5
+**Discord Version**: 3.6
+**Twitch Version**: 3.6
+**AI Core vertion**: 3.6
 
 ## My Socials
 
@@ -20,17 +20,20 @@ The latest place to find the code being used for Flow-Mu is in the folder: [**li
 
 ## FAQ
 
-#### Why can't I turn on the AI
-The bot has been coded in a way so that when it is not in use, it won't rack up bills and suddenly stop working 
+#### Why can't I turn on the AI?
+~~The bot has been coded in a way so that when it is not in use, it won't rack up bills and suddenly stop working~~  The AI is now on 24/7, but this will be changed if abused. Feel free to talk with Flow-Mu on Discord or Twitch whenever you want
 
-#### Can I copy the code to use in my own bot
-I would prefer you not to copy the complete code however, I have no issue with you copying bits of the code to help get you started with your own bot. If you do use my code, please provide a link to this GitHub
+#### Can I copy the code to use in my own bot?
+I would prefer you not to copy the complete code however, I have no issue with you copying bits of the code to help get you started with your own bot. **If you do use my code, please provide a link to this GitHub.**
 
 ### If I do make my bot using some of your code, do I have to credit you?
-If you have greatly adjusted the code, then no, however, if it is just a copy and paste, please provide credit
+If you have greatly adjusted the code, then no, however, if **it is just a copy and paste**, please provide credit
 
-### Why is there a ToS for Flow-mu
+### Why is there a ToS for Flow-mu?
 As of version 3 of Flow-mu, a [Terms of Service](https://insane-servers.co.uk/flow-mu_tos) has been put in place. This was done at the request of users, as they wanted security in knowing how the data Flow-mu uses was being handled 
+
+#### Can I invite her to my Discord?
+Currently, there are no restrictions on which Discord servers Flow-Mu can join. This may change in newer versions if the running cost exceeds the dedicated budget.
 
 ## Plans for the future
 ### What to expect for version 4 of Flow-mu
