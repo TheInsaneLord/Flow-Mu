@@ -261,7 +261,7 @@ def count_tokens(text):
 #   |##################  prossessing system  ########################|
 #   |================================================================|
 
-def send_message(response, app):
+def send_message(response, app, msg_id):
     connection = connect_to_db()
     if not connection or not connection.is_connected():
         print("Failed to connect to the database.")
@@ -269,24 +269,31 @@ def send_message(response, app):
     
     cursor = connection.cursor()
     if connection and connection.is_connected():
-            try:
-                # Properly form the SQL query to insert the message
-                if app == "STT_Voice_App":
-                    app = "flowmu_twitch"
-                cursor.execute(
-                    "INSERT INTO flowmu_messages (msg_from, msg_to, message) VALUES (%s, %s, %s)",
-                    ('ai_core', app, response)
-                )
+        try:
+            # Properly form the SQL query to insert the message
+            if app == "STT_Voice_App":
+                app = "flowmu_twitch"
 
-                connection.commit()
+            cursor.execute(
+                "INSERT INTO flowmu_messages (msg_from, msg_to, message, response_to_msg_id) VALUES (%s, %s, %s, %s)",
+                ('ai_core', app, response, msg_id)  # ✅ FIX: include msg_id as 4th parameter
+            )
 
-            except Error as e:
-                print(f"Error sending message to database: {e}")
-                term_print("Error sending message to database")
+            connection.commit()
+
+        except Error as e:
+            print(f"Error sending message to database: {e}")
+            term_print("Error sending message to database")
+
+        finally:
+            cursor.close()
+            connection.close()
 
     # send copy to flowmu_bot_consol
     term_print(f"sending to: {app} message: {response}")
     print(f"sending to: {app} message: {response}")
+
+
 
 def check_message():
     connection = connect_to_db()
@@ -314,7 +321,7 @@ def check_message():
             response = ai_process(message, usr_msg)
             print(response)
             if response != None:
-                send_message(response, msg_from)
+                send_message(response, msg_from, msg_id)
 
             # Mark the message as read (responded = 1)
             try:
