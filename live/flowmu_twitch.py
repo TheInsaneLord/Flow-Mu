@@ -242,12 +242,20 @@ async def send_message(term_msg, message, user_message):
                             response_to_id = int(result_id)
                             
                             print(f"response_to_id: {response_to_id}")
+
+                            cursor.execute(
+                                "SELECT msg_id FROM flowmu_messages WHERE msg_from=%s AND msg_to=%s AND user=%s ORDER BY msg_id DESC LIMIT 1",
+                                ('flowmu_discord', 'ai_core', message.author.name)
+                            )
+                            row = cursor.fetchone()
+                            message_id = int(row[0]) if row else None
+                            print(f"message_id: {message_id}")
                         
                         except Error as e:
                             print(f"Error sending message to database: {e}")             
                 
                 # After sending the message, check for AI response
-                await response(message, response_to_id) 
+                await response(message, response_to_id, message_id) 
 
         else:
             print("User did not agree to ToS")
@@ -260,7 +268,7 @@ async def send_message(term_msg, message, user_message):
     connection.close()
     term_print(term_msg)
     
-async def response(message, response_to_id):
+async def response(message, response_to_id, message_id):
     ai_response = False
     ai_response_loops = 0
     global bot_info, bot
@@ -269,116 +277,226 @@ async def response(message, response_to_id):
     print("Checking for response from AI Core")
     term_print("Checking for response from AI Core")
 
-    # Connect to the database
     connection = connect_to_db()
-
     if not connection or not connection.is_connected():
         print("Failed to connect to the database.")
         return
 
-    # Determine the target channel
+    # Determine target channel
     if message:
         target_channel = message.channel
     else:
+        # Twitch periodic check fallback
         if bot.connected_channels:
             target_channel = bot.connected_channels[0]
         else:
-            # Silent fail if checking periodic but not connected
-            return
+            return  # silent fail
+
+    # Normalize message_id
+    if message_id in (None, 0, "0"):
+        message_id = None
+    else:
+        try:
+            message_id = int(message_id)
+        except (TypeError, ValueError):
+            message_id = None
+
+    # Mode: periodic scan if response_to_id == 1 (your proposed flag)
+    periodic_scan = (message is None and response_to_id == 1)
 
     try:
-        # Loop up to 3 times
-        while ai_response_loops < 3:
-            # 1. Wait 5 seconds to give AI a chance to respond
+        while ai_response_loops < 4:
             await asyncio.sleep(5)
-            
             ai_response_loops += 1
-            cursor = None 
-            
+
+            cursor = None
             try:
                 cursor = connection.cursor(dictionary=True)
 
-                # Query to find the first message
-                cursor.execute(
-                    "SELECT msg_id, message FROM flowmu_messages WHERE msg_to = %s AND msg_from = %s AND responded = %s ORDER BY msg_id ASC LIMIT 1",
-                    ('flowmu_twitch', 'ai_core', False)
-                )
+                # --- Fetch pending AI reply ---
+                if periodic_scan or message_id is None:
+                    # Oldest pending AI reply destined for twitch
+                    cursor.execute(
+                        """
+                        SELECT msg_id, message, response_to_msg_id
+                        FROM flowmu_messages
+                        WHERE msg_to = %s
+                          AND msg_from = %s
+                          AND responded = %s
+                        ORDER BY msg_id ASC
+                        LIMIT 1
+                        """,
+                        ("flowmu_twitch", "ai_core", False)
+                    )
+                else:
+                    # Match AI reply to a specific original msg_id
+                    cursor.execute(
+                        """
+                        SELECT msg_id, message, response_to_msg_id
+                        FROM flowmu_messages
+                        WHERE msg_to = %s
+                          AND msg_from = %s
+                          AND responded = %s
+                          AND response_to_msg_id = %s
+                        ORDER BY msg_id ASC
+                        LIMIT 1
+                        """,
+                        ("flowmu_twitch", "ai_core", False, message_id)
+                    )
 
                 response_record = cursor.fetchone()
 
-                if response_record:
-                    ai_message = response_record['message']
-                    ai_response = True 
+                if not response_record:
+                    if message_id is not None and not periodic_scan:
+                        print(f"Attempt {ai_response_loops}/4: No matching AI response yet for response_to_msg_id={message_id}")
+                    else:
+                        print(f"Attempt {ai_response_loops}/4: No pending AI response yet for Twitch")
+                    continue
 
-                    # Send the response
-                    await target_channel.send(ai_message)
-                    
-                    # Log success
-                    print(f"Response from AI Core (Loop {ai_response_loops}): {ai_message[:30]}...")
-                    term_print("Response from AI Core received and sent.")
+                ai_message = response_record["message"]
+                ai_msg_id = response_record["msg_id"]
 
-                    # Add response to chat history
-                    if chat_history == 'true':
-                        chatbot_id, chatbot_nick = bot_info
-                        if connection.is_connected():
-                            try:
-                                cursor.execute(
-                                    'INSERT INTO flowmu_chatlog (userid, username, message, is_response, platform, response_to) VALUES (%s, %s, %s, %s, %s, %s)',
-                                    (chatbot_id, chatbot_nick, ai_message, True, 'twitch', response_to_id)
-                                )
-                                connection.commit()
-                            except Error as e:
-                                print(f"Error sending message to database: {e}")
-                    
-                    # Clean up the database
+                # Pull origin info (and optionally create chatlog threading id)
+                info = message_info(
+                    cursor,
+                    response_record,
+                    chat_history=chat_history,
+                    bot_info=bot_info,
+                    fallback_response_to_id=response_to_id,
+                    connection=connection,
+                )
+
+                # Send to twitch
+                await target_channel.send(ai_message)
+                ai_response = True
+
+                print(f"Response from AI Core (Loop {ai_response_loops}): {ai_message[:30]}...")
+                term_print("Response from AI Core received and sent.")
+
+                # If chat_history is on, message_info may have built a better thread id
+                final_response_to_id = info.get("chatlog_response_to_id", response_to_id)
+
+                if chat_history == "true":
+                    chatbot_id, chatbot_nick = bot_info
                     try:
                         cursor.execute(
-                            "DELETE FROM flowmu_messages WHERE msg_id = %s",
-                            (response_record['msg_id'],)
-                        )
-                        connection.commit()
-
-                        cursor.execute(
-                            "DELETE FROM flowmu_messages WHERE msg_from = %s AND msg_to = %s AND responded = %s",
-                            ('flowmu_twitch', 'ai_core', True)
+                            """
+                            INSERT INTO flowmu_chatlog (userid, username, message, is_response, platform, response_to)
+                            VALUES (%s, %s, %s, %s, %s, %s)
+                            """,
+                            (chatbot_id, chatbot_nick, ai_message, True, "twitch", final_response_to_id)
                         )
                         connection.commit()
                     except Error as e:
-                        print(f"Error cleaning up messages: {e}")
+                        print(f"Error writing AI message to chatlog: {e}")
 
-                    # Break the loop immediately since we found a response
-                    break
+                # --- Cleanup ---
+                try:
+                    # delete the AI reply row we used
+                    cursor.execute("DELETE FROM flowmu_messages WHERE msg_id = %s", (ai_msg_id,))
+                    connection.commit()
+
+                    # delete origin row if we can identify it
+                    origin_msg_id = info.get("origin_msg_id")
+                    if origin_msg_id is not None:
+                        cursor.execute("DELETE FROM flowmu_messages WHERE msg_id = %s", (origin_msg_id,))
+                        connection.commit()
+                        print(f"Deleted origin msg_id={origin_msg_id} and AI reply msg_id={ai_msg_id}")
+                    else:
+                        print(f"Deleted AI reply msg_id={ai_msg_id} (no origin msg_id found)")
+
+                except Error as e:
+                    print(f"Error cleaning up messages: {e}")
+
+                break  # done
 
             except Error as e:
                 print(f"Error retrieving response from database: {e}")
-            
+
             finally:
-                # Ensure cursor is closed for this loop iteration
                 if cursor:
                     cursor.close()
-            
-            # If no response was found in this iteration, the loop continues.
-            # The await asyncio.sleep(5) at the top will trigger again for the next attempt.
 
-        # If the loop finishes and we never got a response
         if not ai_response:
-            print(f"No response from AI Core after 3 attempts (15 seconds total).")
-            term_print("No response from AI Core after 15 seconds.")
+            if message_id is not None and not periodic_scan:
+                print(f"No response from AI Core after {ai_response_loops} attempts ({ai_response_loops*5} seconds total) for response_to_msg_id={message_id}.")
+            else:
+                print(f"No response from AI Core after {ai_response_loops} attempts ({ai_response_loops*5} seconds total) for Twitch.")
+            term_print("No response from AI Core after waiting.")
 
     except Exception as e:
         print(f"Critical error in response function: {e}")
 
     finally:
-        # Ensure the main connection is closed once we are completely done
         if connection.is_connected():
             connection.close()
-                                   
+
+def message_info(
+    cursor,
+    response_record,
+    *,
+    chat_history="false",
+    bot_info=None,
+    fallback_response_to_id=0,
+    connection=None,
+):
+    """
+    Builds the context for an AI reply row.
+
+    - Finds the origin message via response_to_msg_id (if present)
+    - If chat_history is enabled and origin isn't from twitch, logs origin into flowmu_chatlog first
+      and returns the new chatlog id to thread the AI response.
+    """
+    origin_msg_id = response_record.get("response_to_msg_id")
+    origin_row = None
+    chatlog_response_to_id = fallback_response_to_id
+
+    if origin_msg_id is not None:
+        cursor.execute(
+            """
+            SELECT msg_id, msg_from, msg_to, message, user, responded
+            FROM flowmu_messages
+            WHERE msg_id = %s
+            LIMIT 1
+            """,
+            (origin_msg_id,)
+        )
+        origin_row = cursor.fetchone()
+
+    # If we have an origin row from another app (ex: STT_Voice_App),
+    # and chat_history is enabled, log it so the AI response can thread to it.
+    if chat_history == "true" and origin_row and origin_row.get("msg_from") != "flowmu_twitch":
+        try:
+            # Use msg_from as the "username" since we don't have a real user id here
+            cursor.execute(
+                """
+                INSERT INTO flowmu_chatlog (userid, username, message, is_response, platform, response_to)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (0, origin_row["msg_from"], origin_row["message"], False, origin_row["msg_from"], None)
+            )
+            connection.commit()
+
+            cursor.execute("SELECT LAST_INSERT_ID() AS id")
+            row = cursor.fetchone()
+            if row and row.get("id") is not None:
+                chatlog_response_to_id = int(row["id"])
+
+        except Error as e:
+            print(f"Error archiving origin message to chatlog: {e}")
+
+    return {
+        "origin_msg_id": origin_msg_id,
+        "origin_row": origin_row,
+        "chatlog_response_to_id": chatlog_response_to_id,
+    }
+
 async def periodic_check(interval):
     while True:
         old_settings = settings.copy()
         check_settings()  # This will call your existing check_settings function
         send_status() # send status update
-        await response(None, 0)
+        await response(None, 1, 0)
 
         # Check if channels have changed
         if old_settings.get('chat_channel') != settings.get('chat_channel'):
