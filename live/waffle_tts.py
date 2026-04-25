@@ -7,6 +7,7 @@ import config
 import time
 import asyncio
 import mysql.connector
+import os
 from mysql.connector import Error
 from queue import Queue
 from datetime import datetime
@@ -19,6 +20,10 @@ chat_tts = True
 chat_tts_lock = False
 flowmu_tts = True
 waffle_follow = False
+
+# save controls
+save_audio = True
+save_path = "/home/owen/Music/flow-mu/voice"
 
 # Eleven Labs configuration
 use_elevenlab = True
@@ -76,13 +81,12 @@ async def waffle_following(bot):
             if result and 'value' in result:
                 new_channel = result['value']
                 if new_channel != chat_channels[0]:  # Only update if the channel changed
+                    old_channel = chat_channels[0]
                     chat_channels = [new_channel]
                     print(f"Updated chat channel to: {chat_channels[0]}")
                     
-                    # Rejoin new channel
-                    await bot.part_channels([chat_channels[0]])  # Leave old channel
-                    await bot.join_channels(chat_channels)  # Join new channel
-                    
+                    await bot.part_channels([old_channel])
+                    await bot.join_channels(chat_channels)
             else:
                 chat_channels = [default_chat_channel]
                 print("No valid chat_channel found in database. Using default chat channel.")
@@ -90,16 +94,13 @@ async def waffle_following(bot):
         chat_channels = [default_chat_channel]
         print(f"Database connectivity error: {e}. Using fallback settings.")
 
-
-
 # Periodic check to update channels
 async def periodic_check(interval, bot):
     while True:
         if waffle_follow:
             print("Running periodic check for waffle follow...")
-            await waffle_following(bot)  # Ensure it's awaited
+            await waffle_following(bot)
         await asyncio.sleep(interval)
-
 
 # Start the TTS worker thread
 def tts_worker():
@@ -136,30 +137,59 @@ def speak_text_gtts_chat(text):
 def speak_text_elevenlabs_flowmu(text):
     def speak():
         try:
-            url = "https://api.elevenlabs.io/v1/text-to-speech/" + elevenlabs_voice_id
-            headers = {"Content-Type": "application/json", "xi-api-key": elevenlabs_key}
-            data = {"text": text, "voice_settings": {"stability": 0.5, "similarity_boost": 0.5}}
-            response = requests.post(url, json=data, headers=headers)
-            if response.status_code == 200:
-                with open("flowmu_output.mp3", "wb") as f:
-                    f.write(response.content)
-                process = subprocess.Popen(["mpg123", "-q", "flowmu_output.mp3"])
-                while process.poll() is None:
-                    if tts_skip_event.is_set():
-                        process.kill()
-                        tts_skip_event.clear()
-                        break
-            else:
-                print(f"Error in ElevenLabs TTS: {response.status_code}, {response.text}")
+            url = f"https://api.elevenlabs.io/v1/text-to-speech/{elevenlabs_voice_id}"
+            headers = {
+                "Content-Type": "application/json",
+                "accept": "audio/mpeg",
+                "xi-api-key": elevenlabs_key
+            }
+            data = {
+                "text": text,
+                "voice_settings": {
+                    "stability": 0.5,
+                    "similarity_boost": 0.5
+                }
+            }
+
+            r = requests.post(url, json=data, headers=headers)
+            if r.status_code != 200:
+                print(f"Error in ElevenLabs TTS: {r.status_code}, {r.text}")
+                return
+
+            with open("flowmu_output.mp3", "wb") as f:
+                f.write(r.content)
+
+            p = subprocess.Popen(["mpg123", "-q", "flowmu_output.mp3"])
+            while p.poll() is None:
+                if tts_skip_event.is_set():
+                    p.kill()
+                    tts_skip_event.clear()
+                    break
+
+            if save_audio:
+                try:
+                    os.makedirs(save_path, exist_ok=True)
+                    ts = time.strftime("%Y%m%d-%H%M%S")
+                    dest = os.path.join(save_path, f"{ts}.mp3")
+                    with open(dest, "wb") as f:
+                        f.write(r.content)
+                except Exception as e:
+                    print(f"Save error: {e}")
+
         except Exception as e:
             print(f"Error in ElevenLabs API: {e}")
+
     if flowmu_tts:
         speak()
 
 # Define the bot class
 class Bot(commands.Bot):
     def __init__(self):
-        super().__init__(token=oauth_token, prefix='?', initial_channels=chat_channels)
+        super().__init__(
+            token=oauth_token,
+            prefix='?',
+            initial_channels=chat_channels
+        )
 
     async def event_ready(self):
         print(f'Logged in as | {self.nick}')
@@ -169,10 +199,10 @@ class Bot(commands.Bot):
     async def event_message(self, message):
         if message.echo or message.author.name in ignore_users:
             return
-        
+
         print(f"{message.author.name}: {message.content}")
 
-        is_flowmu = message.author.name.lower() == 'flowmubot'.lower()
+        is_flowmu = message.author.name.lower() == 'flowmubot'
         print(f"Is Flow-Mu: {is_flowmu}")
 
         if chat_tts and not message.content.startswith('?') and message.author.name not in no_tts_users:
@@ -203,8 +233,8 @@ class Bot(commands.Bot):
             tts_skip_event.set()
             await ctx.send(f"TTS skipped by {ctx.author.name}.")
         elif task == 'follow':
-            waffle_follow = not waffle_follow  # Toggle the value
-            await waffle_following(self)  # Pass the bot instance
+            waffle_follow = not waffle_follow
+            await waffle_following(self)
             status = "enabled" if waffle_follow else "disabled"
             await ctx.send(f"Waffle following is now {status}.")
         else:
@@ -215,20 +245,14 @@ class Bot(commands.Bot):
                 chat_tts = True
                 await ctx.send("Chat TTS enabled.")
 
-
-# Initialize and run the bot
-bot = Bot()
-
-# Startup functions
+# Startup + run (Python 3.14 safe)
 elab_check()
 
-async def startup():
-    await waffle_following(bot)  # Ensure the bot instance is passed correctly
-    bot.loop.create_task(periodic_check(30, bot))  # Start periodic check for channel updates
+async def main():
+    bot = Bot()
+    await waffle_following(bot)
+    bot.loop.create_task(periodic_check(30, bot))
+    await bot.start()
 
-# Run the bot properly
-bot.loop.run_until_complete(startup())  # Ensure startup function executes before bot starts
-bot.run()
-
-
-    
+if __name__ == "__main__":
+    asyncio.run(main())
