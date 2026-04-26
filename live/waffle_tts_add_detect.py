@@ -34,7 +34,7 @@ elevenlabs_key = config.elevenlabs_key
 elevenlabs_voice_id = config.elevenlabs_voice_id  # Change this to your desired voice ID
 
 # OAuth token and channels
-default_chat_channel = 'flowmubot'
+default_chat_channel = 'the_insane_lord'
 chat_channels = [default_chat_channel]
 oauth_token = config.twitch_bot_oauth
 
