@@ -24,6 +24,10 @@ chat_tts_lock = False
 flowmu_tts = True
 waffle_follow = False
 
+# event/allerts
+eventsub_status = True
+detect_ads = True
+
 # save controls
 save_audio = True
 save_path = "/home/owen/Music/flow-mu/voice"
@@ -254,11 +258,17 @@ def refresh_twitch_tts_token():
         return False
 
 
-async def create_ad_eventsub_subscription(session_id):
-    if not twitch_tts_broadcaster_id:
-        print("Missing config.twitch_tts_broadcaster_id. Cannot subscribe to ad events.")
-        return False
+# --- EventSub Setup ---
+# To add a new EventSub event:
+# 1. Add a detect_x toggle near the top with the other event toggles
+# 2. Add any required scopes to twitch_tts_scopes (check Twitch docs)
+# 3. Add a subscription call inside setup_eventsub_subscriptions()
+#    (include correct condition fields like broadcaster_user_id, moderator_user_id, etc.)
+# 4. Fill in the handle_x() function with your logic and toggle check (if not detect_x: return)
+# 5. Add an elif branch in route_eventsub_notification() if the event type isn't already routed
+# 6. Add a ?ev x toggle in the ev() command and update the unknown event message
 
+async def create_eventsub_subscription(session_id, event_type, version, condition, label="EventSub"):
     url = "https://api.twitch.tv/helix/eventsub/subscriptions"
     headers = {
         "Client-ID": twitch_tts_client_id,
@@ -266,11 +276,9 @@ async def create_ad_eventsub_subscription(session_id):
         "Content-Type": "application/json"
     }
     data = {
-        "type": "channel.ad_break.begin",
-        "version": "1",
-        "condition": {
-            "broadcaster_user_id": twitch_tts_broadcaster_id
-        },
+        "type": event_type,
+        "version": version,
+        "condition": condition,
         "transport": {
             "method": "websocket",
             "session_id": session_id
@@ -281,18 +289,129 @@ async def create_ad_eventsub_subscription(session_id):
         r = requests.post(url, headers=headers, json=data)
 
         if r.status_code in (200, 202):
-            print("Subscribed to Twitch ad break EventSub.")
+            print(f"Subscribed to Twitch {label} EventSub.")
             return True
 
-        print(f"Failed to subscribe to ad EventSub: {r.status_code}, {r.text}")
+        print(f"Failed to subscribe to {label} EventSub: {r.status_code}, {r.text}")
         return False
 
     except Exception as e:
-        print(f"Error creating ad EventSub subscription: {e}")
+        print(f"Error creating {label} EventSub subscription: {e}")
         return False
 
 
-async def eventsub_ad_listener(bot):
+async def setup_eventsub_subscriptions(session_id):
+    if not twitch_tts_broadcaster_id:
+        print("Missing broadcaster user ID. Cannot subscribe to EventSub events.")
+        return
+
+    # Currently active EventSub subscriptions
+    # Ad EventSub is subscribed whenever EventSub is enabled.
+    # detect_ads only controls whether Waffle responds to the event.
+    await create_eventsub_subscription(
+        session_id=session_id,
+        event_type="channel.ad_break.begin",
+        version="1",
+        condition={"broadcaster_user_id": twitch_tts_broadcaster_id},
+        label="ad break"
+    )
+
+    # Future EventSub subscriptions can be added here.
+    # Example structure:
+    # await create_eventsub_subscription(
+    #     session_id=session_id,
+    #     event_type="channel.follow",
+    #     version="2",
+    #     condition={
+    #         "broadcaster_user_id": twitch_tts_broadcaster_id,
+    #         "moderator_user_id": twitch_tts_broadcaster_id
+    #     },
+    #     label="follow"
+    # )
+
+
+# --- EventSub Event Handlers ---
+async def handle_ad_break(bot, event):
+    if not detect_ads:
+        print("Ad detection disabled. Ignoring ad event.")
+        return
+
+    print("EventSub ad break detected.")
+
+    current_chat_channel = chat_channels[0].lower() if chat_channels else ""
+
+    if twitch_tts_broadcaster_login and current_chat_channel != twitch_tts_broadcaster_login:
+        print(
+            f"Ad break belongs to {twitch_tts_broadcaster_login}, "
+            f"but Waffle is currently listening to {current_chat_channel}. Skipping ad TTS."
+        )
+        return
+
+    if bot.connected_channels:
+        channel = bot.connected_channels[0]
+        await channel.send(ad_message)
+        tts_queue.put((ad_message, True))
+        print("Ad break message sent and queued TTS.")
+    else:
+        print("Ad break detected, but no connected chat channel found.")
+
+
+async def handle_follow(bot, event):
+    # Placeholder for future follow alerts.
+    # EventSub type: channel.follow
+    pass
+
+
+async def handle_raid(bot, event):
+    # Placeholder for future raid alerts.
+    # EventSub type: channel.raid
+    pass
+
+
+async def handle_sub(bot, event):
+    # Placeholder for future sub alerts.
+    # EventSub types:
+    # channel.subscribe
+    # channel.subscription.message
+    # channel.subscription.gift
+    pass
+
+
+async def handle_redeem(bot, event):
+    # Placeholder for future channel point redeem alerts.
+    # EventSub types:
+    # channel.channel_points_custom_reward_redemption.add
+    # channel.channel_points_automatic_reward_redemption.add
+    pass
+
+
+async def route_eventsub_notification(bot, subscription_type, event):
+    if subscription_type == "channel.ad_break.begin":
+        await handle_ad_break(bot, event)
+    elif subscription_type == "channel.follow":
+        await handle_follow(bot, event)
+    elif subscription_type == "channel.raid":
+        await handle_raid(bot, event)
+    elif subscription_type in (
+        "channel.subscribe",
+        "channel.subscription.message",
+        "channel.subscription.gift"
+    ):
+        await handle_sub(bot, event)
+    elif subscription_type in (
+        "channel.channel_points_custom_reward_redemption.add",
+        "channel.channel_points_automatic_reward_redemption.add"
+    ):
+        await handle_redeem(bot, event)
+    else:
+        print(f"Unhandled EventSub notification type: {subscription_type}")
+
+
+async def eventsub_listener(bot):
+    if not eventsub_status:
+        print("EventSub system disabled. EventSub listener not started.")
+        return
+
     try:
         import websockets
     except ImportError:
@@ -300,7 +419,7 @@ async def eventsub_ad_listener(bot):
         return
 
     if not validate_twitch_tts_token():
-        print("Twitch TTS token is not ready. EventSub ad detection disabled.")
+        print("Twitch TTS token is not ready. EventSub detection disabled.")
         return
 
     websocket_url = "wss://eventsub.wss.twitch.tv/ws?keepalive_timeout_seconds=30"
@@ -319,30 +438,13 @@ async def eventsub_ad_listener(bot):
                     if message_type == "session_welcome":
                         session_id = payload["session"]["id"]
                         print(f"EventSub session started: {session_id}")
-                        await create_ad_eventsub_subscription(session_id)
+                        await setup_eventsub_subscriptions(session_id)
 
                     elif message_type == "notification":
                         subscription = payload.get("subscription", {})
-
-                        if subscription.get("type") == "channel.ad_break.begin":
-                            print("EventSub ad break detected.")
-
-                            current_chat_channel = chat_channels[0].lower() if chat_channels else ""
-
-                            if twitch_tts_broadcaster_login and current_chat_channel != twitch_tts_broadcaster_login:
-                                print(
-                                    f"Ad break belongs to {twitch_tts_broadcaster_login}, "
-                                    f"but Waffle is currently listening to {current_chat_channel}. Skipping ad TTS."
-                                )
-                                continue
-
-                            if bot.connected_channels:
-                                channel = bot.connected_channels[0]
-                                await channel.send(ad_message)
-                                tts_queue.put((ad_message, True))
-                                print("Ad break message sent and queued TTS.")
-                            else:
-                                print("Ad break detected, but no connected chat channel found.")
+                        event = payload.get("event", {})
+                        subscription_type = subscription.get("type", "")
+                        await route_eventsub_notification(bot, subscription_type, event)
 
                     elif message_type == "session_keepalive":
                         pass
@@ -497,11 +599,16 @@ class Bot(commands.Bot):
         )
 
     async def event_ready(self):
+        print("\n--- TTS Bot Ready ---")
         print(f'Logged in as | {self.nick}')
         print(f"Listening on: {chat_channels}")
         print("Bot is ready and running.")
+        print("------\n")
 
     async def event_ad_break(self, payload):
+        if not detect_ads:
+            print("Ad detection disabled. Ignoring ad break event.")
+            return
         if not self.connected_channels:
             print("Ad break detected, but no connected channel found.")
             return
@@ -542,11 +649,30 @@ class Bot(commands.Bot):
 
         await self.handle_commands(message)
 
+
+#  ---  Chat Commands ---
     @commands.command()
     async def ad(self, ctx: commands.Context):
         await ctx.send(ad_message)
         tts_queue.put((ad_message, True))
         print(f"Manual ad message sent by {ctx.author.name} and queued TTS.")
+
+    @commands.command()
+    async def ev(self, ctx: commands.Context, event: str = 'x'):
+        global detect_ads
+        event = event.lower()
+
+        if event == 'ad':
+            if not eventsub_status:
+                await ctx.send("EventSub is disabled. Restart Waffle with eventsub_status = True to use events.")
+                return
+
+            detect_ads = not detect_ads
+            status = "enabled" if detect_ads else "disabled"
+            await ctx.send(f"Ad detection is now {status}.")
+            return
+
+        await ctx.send("Unknown event. Available: ad")
 
     # TTS toggle command
     @commands.command()
@@ -576,15 +702,33 @@ class Bot(commands.Bot):
                 chat_tts = True
                 await ctx.send("Chat TTS enabled.")
 
-# Startup + run (Python 3.14 safe)
-elab_check()
-
 async def main():
     bot = Bot()
+
+    # --- SCHEDULERS ---
+    print("\n--- Schedulers ---")
     await waffle_following(bot)
     bot.loop.create_task(periodic_check(30, bot))
-    bot.loop.create_task(eventsub_ad_listener(bot))
+    print("--- Schedulers Done ---")
+
+    # --- EVENT SUBS ---
+    if eventsub_status:
+        print("--- EventSub Setup ---")
+        validate_twitch_tts_token()
+        bot.loop.create_task(eventsub_listener(bot))
+        print("--- EventSub Ready ---")
+    else:
+        print("--- EventSub Skipped (eventsub_status = False) ---")
+
+    # --- BOT RUN ---
+    print("\n--- Bot Starting ---")
     await bot.start()
 
 if __name__ == "__main__":
+    # --- STARTUP FUNCTIONS ---
+    print("--- Startup Functions ---")
+    elab_check()
+    print("--- Startup Functions Done ---")
+
+    # --- RUN ---
     asyncio.run(main())
