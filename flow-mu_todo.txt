@@ -1,3 +1,5 @@
+> Important note: the TODO has moved to a self-hosted option, and this file may be outdated, but kept for refrence
+
 * means done
 + means working on curently
 - task/idea scraped or might be added later
